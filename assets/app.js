@@ -6,18 +6,18 @@ const QUADS = ['High / growing','High / declining','Low / growing','Low / declin
 const QC = {'High / growing':'var(--hi)','High / declining':'var(--hi-lt)','Low / growing':'var(--lo)','Low / declining':'var(--lo-lt)','Not charted':'var(--nc)'};
 const LEVELS = ['UG','Masters','Doctoral','Diploma/Tech','Post-bacc'];
 const FACS = [...new Set(RAW.map(r=>r.fac))].sort();
-const TABS = [['brief','Briefing'],['costing','Costing model'],['portfolio','Portfolio'],['quadrants','Quadrants'],['faculties','Faculties'],['programs','Programs'],['categories','Categories'],['scenarios','Scenarios']];
-const DEF_P = {trend:'c3',grow:0,marg:'thr',smUG:25,smGR:8,minN:0,size:'e24'};
+const TABS = [['brief','Briefing'],['costing','Costing model'],['portfolio','Portfolio'],['quadrants','Quadrants'],['labour','Labour market'],['faculties','Faculties'],['programs','Programs'],['categories','Categories'],['scenarios','Scenarios']];
+const DEF_P = {trend:'c3',grow:0,marg:'thr',smUG:25,smGR:8,minN:0,size:'e24',lm:'lma'};
 const DEF_W = {below:2,decl:1,sust:1,small:1,weak:1,share:1,grads:1,deficit:1, strong:2,short:1,grow:1,above:1,mkt:1,res:1};
 const DEF_S = {rev:8,mod:4,nc:0,rat:-100,vc:40,ratRec:60,eff:0,dropTeach:true};
-const RISK = [['below','Below margin line'],['decl','Enrolment declining'],['sust','Declining on 3- and 10-yr'],['small','Subscale enrolment'],['weak','Weaker labour market (LMA 3–4)'],['share','Losing NS market share'],['grads','Credentials decreasing'],['deficit','Deficit over $500K']];
-const OPP = [['strong','Stronger labour market (LMA 1–2)'],['short','Workforce shortage risk'],['grow','Enrolment growing'],['above','At or above margin line'],['mkt','Rising share or growing market'],['res','Research-priority aligned']];
+const RISK = [['below','Below margin line'],['decl','Enrolment declining'],['sust','Declining on 3- and 10-yr'],['small','Subscale enrolment'],['weak','Weaker labour market'],['share','Losing NS market share'],['grads','Credentials decreasing'],['deficit','Deficit over $500K']];
+const OPP = [['strong','Stronger labour market'],['short','Workforce shortage risk'],['grow','Enrolment growing'],['above','At or above margin line'],['mkt','Rising share or growing market'],['res','Research-priority aligned']];
 
 const store = {get(k,d){try{const v=localStorage.getItem('aprlens.'+k);return v?JSON.parse(v):d}catch(e){return d}}, set(k,v){try{localStorage.setItem('aprlens.'+k,JSON.stringify(v))}catch(e){}}};
 let P = Object.assign({},DEF_P,store.get('P',{}));
 let W = Object.assign({},DEF_W,store.get('W',{}));
 let S = Object.assign({},DEF_S,store.get('S',{}));
-let F = {fac:'All',lv:'All',cat:'All',teach:true};
+let F = {fac:'All',lv:'All',cat:'All',teach:true,lmg:'All'};
 let OV = store.get('OV',{});
 let tab = (location.hash||'').slice(1); if(!TABS.some(t=>t[0]===tab)) tab = store.get('tab','brief');
 let mFilter = '';
@@ -49,7 +49,8 @@ function derive(r){
   o.quad = (o.mrel==null || o.growing==null || !r.e24) ? 'Not charted' : (o.above?'High':'Low')+' / '+(o.growing?'growing':'declining');
   o.isGrad = ['Masters','Doctoral'].includes(r.lv);
   o.small = (r.e24||0) < (o.isGrad ? P.smGR : P.smUG);
-  o.lmaS = r.lma===1||r.lma===2 ? 'strong' : r.lma===3||r.lma===4 ? 'weak' : 'none';
+  o.lmg = LENS[P.lm].g(r);
+  o.lmaS = lmStrong(r);
   o.costRec = r.cost>0 ? r.rev/r.cost : null;
   o.sole = r.ms===1;
   const R = {below:o.above===false, decl:o.growing===false, sust:(r.c3!=null&&r.c10!=null&&r.c3<0&&r.c10<0), small:o.small && !!r.e24, weak:o.lmaS==='weak', share:r.mst==='Falling share', grads:r.grad==='Decreasing', deficit:(r.mar||0) < -500000};
@@ -71,7 +72,7 @@ function derive(r){
 let ALL = [], VIS = [];
 function recompute(){
   ALL = RAW.map(derive);
-  VIS = ALL.filter(r => (F.fac==='All'||r.fac===F.fac) && (F.lv==='All'||r.lv===F.lv) && (F.cat==='All'||r.cat===F.cat) && (F.teach||!r.teach));
+  VIS = ALL.filter(r => (F.fac==='All'||r.fac===F.fac) && (F.lv==='All'||r.lv===F.lv) && (F.cat==='All'||r.cat===F.cat) && (F.teach||!r.teach) && (F.lmg==='All'||r.lmg===+F.lmg));
 }
 function totals(a){
   const cost=sum(a,r=>r.cost), rev=sum(a,r=>r.rev), mar=sum(a,r=>r.mar), chp=sum(a,r=>r.chp);
@@ -105,19 +106,21 @@ function initControls(){
   opts($('fFac'),FACS,F.fac,'All faculties'); opts($('fLv'),LEVELS,F.lv,'All levels'); opts($('fCat'),CATS,F.cat,'All categories');
   $('fFac').onchange=e=>{F.fac=e.target.value;render()}; $('fLv').onchange=e=>{F.lv=e.target.value;render()}; $('fCat').onchange=e=>{F.cat=e.target.value;render()};
   $('fTeach').onchange=e=>{F.teach=e.target.checked;render()};
-  const pmap={pTrend:'trend',pGrow:'grow',pMarg:'marg',pSmUG:'smUG',pSmGR:'smGR',pMinN:'minN',pSize:'size'};
-  Object.entries(pmap).forEach(([id,k])=>{ const el=$(id); el.value=P[k]; el.onchange=()=>{ P[k]= el.type==='number'? (+el.value||0) : el.value; store.set('P',P); render(); }; });
+  $('fLm').onchange=e=>{F.lmg=e.target.value;render()};
+  const pmap={pTrend:'trend',pGrow:'grow',pMarg:'marg',pSmUG:'smUG',pSmGR:'smGR',pMinN:'minN',pSize:'size',pLm:'lm'};
+  Object.entries(pmap).forEach(([id,k])=>{ const el=$(id); el.value=P[k]; el.onchange=()=>{ P[k]= el.type==='number'? (+el.value||0) : el.value; if(k==='lm') F.lmg='All'; store.set('P',P); render(); }; });
   $('pReset').onclick=()=>{ P={...DEF_P}; Object.entries(pmap).forEach(([id,k])=>$(id).value=P[k]); store.set('P',P); render(); };
   $('tabs').innerHTML = TABS.map(([k,l])=>`<button role="tab" type="button" data-tab="${k}" aria-selected="${k===tab}">${l}</button>`).join('');
   $('tabs').onclick = e => { const b=e.target.closest('[data-tab]'); if(!b) return; tab=b.dataset.tab; store.set('tab',tab); document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===tab)); render(); window.scrollTo({top:0}); };
 }
 function render(){
   recompute(); TIPS.clear(); tipN=0;
+  $('fLm').innerHTML=`<option value="All">All (${LENS[P.lm].name})</option>`+LENS[P.lm].groups.map((g,i)=>`<option value="${i}"${String(i)===String(F.lmg)?' selected':''}>${esc(g)}</option>`).join(''); $('fLmLab').firstChild.textContent='Labour market';
   SIZEMAX = Math.max(...ALL.map(r=>{const v=P.size==='absmar'?Math.abs(r.mar||0):r[P.size];return v||0}));
   const t = totals(VIS);
   $('scope').textContent = `${VIS.length} of ${RAW.length} programs · ${fN(t.e24)} students · line: ${P.marg==='thr'?'table threshold':'$0'} · trend: ${P.trend==='c3'?'3-yr':'10-yr'}`;
   const v = $('view');
-  ({brief:vBrief,costing:vCosting,portfolio:vPortfolio,quadrants:vQuadrants,faculties:vFaculties,programs:vPrograms,categories:vCategories,scenarios:vScenarios})[tab](v);
+  ({brief:vBrief,costing:vCosting,portfolio:vPortfolio,quadrants:vQuadrants,labour:vLabour,faculties:vFaculties,programs:vPrograms,categories:vCategories,scenarios:vScenarios})[tab](v);
   decorateStories(v);
   v.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{ tab=b.dataset.goto; store.set('tab',tab); document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===tab)); render(); window.scrollTo({top:0}); });
 }
@@ -168,6 +171,10 @@ const FINDINGS = [
  ['R7','r','The category mix is front-loaded on Revitalize.','160 programs (62%) are Revitalize, carrying −$25.9M. Rationalize covers 9 programs, 263 students and only −$0.08M, so it barely moves the financial picture. No Change carries −$17.2M (38% of the gap).','categories'],
  ['O1','o','Strong-labour-market programs sit on both sides of the line.','40 programs pair a stronger labour-market signal (LMA 1–2) with a below-line margin (−$27.5M). These are the guide\'s "why is a high-demand program operating at a negative margin?" cases: cost-effectiveness reviews, not rationalization.','quadrants'],
  ['O2','o','Most programs are the only provider in Nova Scotia.','167 programs hold 100% of NS credentials in their CIP. That makes market-share trend uninformative for most of the portfolio, but it is strong evidence of uniqueness and comparative advantage for the guide\'s "only credential in the province" factor.','quadrants'],
+ ['O4','o','Enrolment is moving toward labour-market need.','On the LMA signal, programs with the strongest signal grew 12% since 2021-22 (+416 students) and those with a stronger signal 4% (+231). Weaker-signal programs were flat and programs with no signal shrank. This is the story a provincial reviewer will want to see, and it should lead the Template 7 labour-market discussion.','labour'],
+ ['R8','r','Growing where demand is costs money.','The 31 programs linked to occupations with a strong COPS shortage risk grew 17% (3,368 to 3,953 students) but carry a −$18.1M instructional contribution. Growth here is what the province wants and what tuition does not pay for: the case for targeted program funding, which the costing model does count as revenue.','labour'],
+ ['R9','r','Supply to shortage occupations is falling in a third of cases.','32 of 78 shortage-aligned programs are declining on the 3-year trend (1,785 students), and 23 have decreasing credentials. These are the most exposed programs if the review is read as "are you producing the graduates Nova Scotia needs?".','labour'],
+ ['R10','r','Signal gaps sit in large programs.','37 programs (2,372 students, −$16.5M) have no LMA signal, including the Engineering diploma (781 students) and the JD (497), both with a good NS employment outlook. Fifteen Arts programs carry a shortage flag from a single-occupation mapping. Both invite challenge unless the method is documented.','labour'],
  ['O3','o','Growth engines exist outside Computer Science.','Above-line, growing programs with a stronger labour-market signal are the natural Modernize-and-grow set. Filter the Programs view by high opportunity and low risk to list them by faculty.','programs']
 ];
 const CHART = {"kpi": "Portfolio KPIs", "whale": "Cumulative margin curve", "mix": "Quadrant mix", "hist": "Margin per CHP histogram", "bands": "Size bands", "bub1": "Margin × enrolment trend", "lma": "Margin × labour market", "mkt": "Market size × share", "facT": "Faculty scorecard", "strip": "Faculty margin spread", "grow": "Where enrolment growth landed", "ro": "Risk × opportunity map", "weights": "Flag weights", "progT": "Program screen", "detail": "Peer comparison", "cmat": "Category signal matrix", "cmix": "Category mix by faculty", "clist": "Recategorization list", "levers": "Scenario levers", "bridge": "Margin bridge", "facimp": "Faculty impact"};
@@ -311,9 +318,12 @@ function vPortfolio(v){
    <section data-s="whale" class="panel" style="grid-column:1/-1"><header><div><h2>Cumulative margin curve</h2><p class="q">Programs ranked from largest surplus to largest deficit. The peak is the total surplus that funds everything to its right; the drop from the peak to the end point is the deficit it must absorb.</p></div>${seg('wc',[['n','By program count'],['chp','By credit hours']],wcWeight)}</header><div id="whale"></div></section>
    <section data-s="mix" class="panel"><header><div><h2>Quadrant mix, weighted four ways</h2><p class="q">The same programs, measured by count, students, credit hours and cost. A mix that shifts as you move down the rows means size and margin are correlated.</p></div></header><div id="mix"></div>${legendQ()}</section>
    <section data-s="hist" class="panel"><header><div><h2>Margin per CHP against the line</h2><p class="q">Distance from each program's margin line (${P.marg==='thr'?'its costing-table threshold':'$0'}). Bars right of zero are above the line.</p></div>${seg('hw',[['n','Programs'],['chp','CHP'],['e24','Students']],histW)}</header><div id="hist"></div><div class="legend"><span><i style="background:var(--lo)"></i>Below line</span><span><i style="background:var(--hi)"></i>At or above line</span></div></section>
+   <section data-s="lmmix" class="panel" style="grid-column:1/-1"><header><div><h2>Quadrant mix by labour-market group</h2><p class="q">The same quadrant split, one row per ${esc(LENS[P.lm].name)} group (change the lens in Analysis parameters or on the Labour market tab). It shows whether labour-market priority programs are also the financially strong or growing ones.</p></div>${seg('lmw',[['n','Programs'],['e24','Students']],lmW)}</header><div id="lmMix"></div>${legendQ()}</section>
    <section data-s="bands" class="panel" style="grid-column:1/-1"><header><div><h2>Size bands: how many programs, and what they cost</h2><p class="q">Programs by 2024-25 enrolment band (top) and the combined dollar margin of each band (bottom).</p></div></header><div id="bands"></div></section>
   </div>`;
   bindSeg(v,'wc',x=>{wcWeight=x;render()}); bindSeg(v,'hw',x=>{histW=x;render()});
+  bindSeg(v,'lmw',x=>{lmW=x;render()});
+  drawLMMix($('lmMix'));
   drawWhale($('whale')); drawMix($('mix'),VIS); drawHist($('hist')); drawBands($('bands'));
 }
 function drawWhale(el){
@@ -406,16 +416,16 @@ function vQuadrants(v){
   v.innerHTML = `
   <div class="grid g2">
    <section data-s="bub1" class="panel" style="grid-column:1/-1"><header><div><h2>Program margin × enrolment trend</h2><p class="q">Guide analysis 1 (p. 117). X: ${P.trend==='c3'?'3-year':'10-year'} enrolment CAGR. Y: margin per CHP relative to ${P.marg==='thr'?'the costing-table threshold':'$0'}. Bubble: ${$('pSize').selectedOptions[0].text.toLowerCase()}. Click a bubble to open the program.</p></div>
-    <div class="row">${seg('qc',[['quad','Colour: quadrant'],['cat','Colour: category'],['fac','Highlight faculty']],qColor)}</div></header>
+    <div class="row">${seg('qc',[['quad','Colour: quadrant'],['cat','Colour: category'],['lm','Colour: labour market'],['fac','Highlight faculty']],qColor)}</div></header>
     <div id="bub1"></div><div id="leg1"></div></section>
    <section data-s="lma" class="panel"><header><div><h2>Program margin × labour market</h2><p class="q">Guide analysis 3 (p. 120). Columns run from weaker to stronger labour-market signal; programs with no signal sit apart on the right.</p></div></header><div id="bub2"></div></section>
    <section data-s="mkt" class="panel"><header><div><h2>Market size trend × market share trend</h2><p class="q">Guide analysis 2 (p. 119). The file has categorical trends only, so this is a matrix: cell shade = students; each cell lists programs, students and total margin.</p></div></header><div id="mkt"></div></section>
   </div>`;
   bindSeg(v,'qc',x=>{qColor=x;render()});
   drawBubble($('bub1')); drawLMA($('bub2')); drawMarket($('mkt'));
-  $('leg1').innerHTML = qColor==='cat'?legendC(): qColor==='fac'? `<div class="legend"><span><i style="background:var(--accent)"></i>${F.fac==='All'?'Pick a faculty in the filter bar to highlight it':esc(F.fac)}</span><span><i style="background:var(--nc)"></i>Other programs</span></div>` : legendQ();
+  $('leg1').innerHTML = qColor==='cat'?legendC(): qColor==='lm'?legendLM(): qColor==='fac'? `<div class="legend"><span><i style="background:var(--accent)"></i>${F.fac==='All'?'Pick a faculty in the filter bar to highlight it':esc(F.fac)}</span><span><i style="background:var(--nc)"></i>Other programs</span></div>` : legendQ();
 }
-function colorOf(r){ if(qColor==='cat') return CATC[r.cat]; if(qColor==='fac') return 'var(--nc)'; return QC[r.quad]; }
+function colorOf(r){ if(qColor==='cat') return CATC[r.cat]; if(qColor==='lm') return LMC[r.lmg]; if(qColor==='fac') return 'var(--nc)'; return QC[r.quad]; }
 function drawBubble(el){
   const pool = qColor==='fac' ? ALL.filter(r=>(F.teach||!r.teach)&&(F.lv==='All'||r.lv===F.lv)) : VIS;
   const a = pool.filter(r=>r.quad!=='Not charted').sort((p,q)=>sizeVal(q)-sizeVal(p));
@@ -927,5 +937,154 @@ STORY.kpi.h='Instructional economics at a glance';
 STORY.kpi.tell='Sets the frame for every other view: how much of the cost the model counts is covered by net credit tuition, and how large the contribution shortfall is before the operating grant. It is not the university\'s financial position: the model counts roughly half of operating spending and none of the grant.';
 STORY.kpi.look=['Tuition coverage below 100% is expected: the operating grant is not allocated to programs.','Never read the contribution figure as the grant requirement or the institutional deficit.','Compare enrolment change with contribution: growth that leaves coverage flat or falling is growth in low-contribution programs.'];
 STORY.detail.m=[];
+
+/* ================= LABOUR MARKET ================= */
+const LENS = {
+ lma:{name:'LMA signal', src:'institutional composite (column AD)', groups:['LMA 1 · strongest','LMA 2 · stronger','LMA 3–4 · weaker','No signal (0)'],
+  g:r=>r.lma===1?0:r.lma===2?1:(r.lma===3||r.lma===4)?2:3},
+ emp:{name:'NS employment outlook', src:'ESDC 3-year employment prospects (column AE)', groups:['Very good','Good','Moderate or limited','Undetermined / no data'],
+  g:r=>r.emp==='Very good'?0:r.emp==='Good'?1:(r.emp==='Moderate'||r.emp==='Limited')?2:3},
+ cops:{name:'COPS workforce outlook', src:'COPS 2024-33 shortage / surplus (column AF)', groups:['Strong shortage risk','Moderate shortage risk','Insufficient signal','Surplus / no data'],
+  g:r=>/Strong risk of Shortage/.test(r.pv)?0:/Moderate risk of Shortage/.test(r.pv)?1:r.pv==='Insufficient signal'?2:3}
+};
+const LMC = ['var(--hi)','var(--hi-lt)','var(--c-rat)','var(--nc)'];
+const lmStrong = r => { const g=LENS[P.lm].g(r); return P.lm==='cops' ? (g<=1?'strong':/Surplus/.test(r.pv)?'weak':'none') : (g<=1?'strong':g===2?'weak':'none'); };
+const legendLM = () => `<div class="legend">${LENS[P.lm].groups.map((g,i)=>`<span><i style="background:${LMC[i]}"></i>${g}</span>`).join('')}</div>`;
+let lmW='e24', lmTblF='all', lmDim=null;
+
+function drawLMMix(el){
+  const L=LENS[P.lm]; const wf=r=>lmW==='n'?1:(r.e24||0);
+  const rows=[...L.groups.map((g,i)=>({lab:g,a:VIS.filter(r=>r.lmg===i),c:LMC[i]})),{lab:'All programs',a:VIS,c:'var(--ink)'}];
+  const W_=1000,rh=30,m={l:190,r:250,t:6},H=m.t+rows.length*(rh+10)+6;
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Quadrant mix by labour-market group">`;
+  rows.forEach((row,i)=>{ const yy=m.t+i*(rh+10)+(i===rows.length-1?6:0); const tot=sum(row.a,wf)||1; let x0=m.l;
+    s+=`<rect x="${m.l-178}" y="${yy+rh/2-5}" width="10" height="10" rx="2" style="fill:${row.c}"/><text x="${m.l-162}" y="${yy+rh/2+4}" class="ink" style="${i===rows.length-1?'font-weight:700':''}">${esc(row.lab)}</text>`;
+    QUADS.forEach(q=>{ const g=row.a.filter(r=>r.quad===q); const val=sum(g,wf); const w=val/tot*(W_-m.l-m.r); if(w<=0) return;
+      s+=`<rect ${tipAttr(`<b>${esc(row.lab)} · ${q==='Not charted'?q:q.replace('High','Above line').replace('Low','Below line')}</b><div class="kv"><span>Programs</span><span>${g.length}</span><span>Students</span><span>${fN(sum(g,r=>r.e24))}</span><span>Share of row</span><span>${fP(val/tot)}</span><span>Contribution</span><span>${f$(sum(g,r=>r.mar))}</span></div>`)} x="${x0+1}" y="${yy}" width="${Math.max(0,w-2)}" height="${rh}" rx="3" style="fill:${QC[q]}"/>`;
+      if(w>34) s+=`<text x="${x0+w/2}" y="${yy+rh/2+4}" text-anchor="middle" style="fill:${q.includes('growing')?'#fff':'var(--ink)'};font-weight:600;font-size:10.5px;pointer-events:none">${Math.round(val/tot*100)}%</text>`;
+      x0+=w; });
+    const e21=sum(row.a,r=>r.e21), e24=sum(row.a,r=>r.e24), ch=e21?e24/e21-1:null;
+    s+=`<text x="${W_-m.r+12}" y="${yy+rh/2-2}" class="ink" style="font-size:11px">${row.a.length} programs · ${fN(e24)} students</text><text x="${W_-m.r+12}" y="${yy+rh/2+12}" style="font-size:10.5px;fill:${ch>=0?'var(--good)':'var(--crit)'}">${fPs(ch)} since 21-22 · <tspan style="fill:var(--ink-2)">${f$(sum(row.a,r=>r.mar))}</tspan></text>`; });
+  el.innerHTML=s+'</svg>';
+}
+
+function vLabour(v){
+  const L=LENS[P.lm], a=VIS; const e24=sum(a,r=>r.e24)||1;
+  const st=a.filter(r=>r.lmaS==='strong'), none=a.filter(r=>r.lmaS==='none'), sh=a.filter(r=>/Shortage/.test(r.pv));
+  const ch=g=>{const x=sum(g,r=>r.e21);return x?sum(g,r=>r.e24)/x-1:null;};
+  v.innerHTML = `
+  <div class="lens-bar"><span>Labour-market lens</span>${seg('lens',[['lma','LMA signal'],['emp','NS employment outlook'],['cops','COPS shortage / surplus']],P.lm)}<span class="scope">${esc(L.src)}. The lens also sets what "stronger labour market" means in risk scores, the signal-implied category and the filter bar.</span></div>
+  <div class="kpis" data-s="lmkpi">
+   <div class="kpi"><div class="l">Students in stronger-signal programs</div><div class="v">${fP(sum(st,r=>r.e24)/e24,0)}</div><div class="d ${ch(st)>=0?'pos':'neg'}">${fPs(ch(st))} since 2021-22 · ${st.length} programs</div></div>
+   <div class="kpi"><div class="l">Students in shortage-aligned programs</div><div class="v">${fP(sum(sh,r=>r.e24)/e24,0)}</div><div class="d ${ch(sh)>=0?'pos':'neg'}">${fPs(ch(sh))} since 2021-22 · COPS</div></div>
+   <div class="kpi"><div class="l">Shortage programs with falling enrolment</div><div class="v">${sh.filter(r=>r.c3!=null&&r.c3<0).length}<span style="font-size:.9rem;color:var(--muted)"> of ${sh.length}</span></div><div class="d">${fN(sum(sh.filter(r=>r.c3<0),r=>r.e24))} students · 3-yr CAGR &lt; 0</div></div>
+   <div class="kpi"><div class="l">Students with no usable signal</div><div class="v">${fP(sum(none,r=>r.e24)/e24,0)}</div><div class="d">${none.length} programs · ${f$(sum(none,r=>r.mar))}</div></div>
+   <div class="kpi"><div class="l">Dal share of NS credentials</div><div class="v">${fP(sum(st,r=>r.cred24)/(sum(st,r=>r.ns24)||1),0)}</div><div class="d">in stronger-signal fields, 2024</div></div>
+  </div>
+  <div class="grid g2">
+   <section data-s="lmshift" class="panel"><header><div><h2>Is enrolment moving toward labour-market need?</h2><p class="q">Students by ${esc(L.name)} group, 2021-22 to 2024-25. Each row shows the start, the end and the change.</p></div></header><div id="lmShift"></div>${legendLM()}</section>
+   <section data-s="lmcost" class="panel"><header><div><h2>The cost of growing where demand is</h2><p class="q">Instructional contribution per credit hour and total, by group. Where the labour market is strongest, programs are often the most expensive to deliver.</p></div></header><div id="lmCost"></div></section>
+   <section data-s="lmsupply" class="panel" style="grid-column:1/-1"><header><div><h2>Supply response: enrolment trend against labour-market signal</h2><p class="q">Each dot is a program, placed by its ${P.trend==='c3'?'3-year':'10-year'} enrolment CAGR within its ${esc(L.name)} group. Size: students. Colour: above or below the margin line. Shaded zones mark where supply is moving against the signal.</p></div></header><div id="lmSupply"></div><div class="legend"><span><i style="background:var(--hi)"></i>At or above margin line</span><span><i style="background:var(--lo)"></i>Below margin line</span><span><i style="background:var(--nc)"></i>No costing</span><span><i style="background:color-mix(in srgb,var(--c-rat) 22%,var(--panel))"></i>Vulnerability: stronger signal, declining</span><span><i style="background:color-mix(in srgb,var(--warn) 18%,var(--panel))"></i>Watch: weaker signal, growing</span></div></section>
+   <section data-s="lmpipe" class="panel" style="grid-column:1/-1"><header><div><h2>Shortage pipeline</h2><p class="q">Programs whose most closely linked occupation has a COPS shortage risk (2024-33), with their supply trend and economics. These are the programs a provincial review will look at first.</p></div>${seg('lmf',[['all','All'],['fall','Supply falling'],['sole','Sole NS provider'],['grow','Expand candidates'],['cost','Costly to grow']],lmTblF)}</header><div id="lmPipe"></div></section>
+   <section data-s="lmfac" class="panel"><header><div><h2>Faculty labour-market profile</h2><p class="q">Share of each faculty's 2024-25 students by ${esc(L.name)} group, with the change in stronger-signal students since 2021-22.</p></div></header><div id="lmFac"></div>${legendLM()}</section>
+   <section data-s="lmcons" class="panel"><header><div><h2>Do the signals agree?</h2><p class="q">NS employment outlook (rows) against COPS outlook (columns). Each cell: programs, students and the spread of LMA signals. Disagreement between the institutional composite and the raw sources is where a reviewer will push back.</p></div></header><div id="lmCons"></div></section>
+   <section data-s="lmread" class="panel" style="grid-column:1/-1"><header><div><h2>Reading the labour-market signals</h2><p class="q">Limits of the evidence, so findings are stated with the right confidence.</p></div></header>
+    <div class="skews">${[
+     ['L1','One occupation per program','Template 1 asks for the single NOC most strongly aligned with each CIP code. Programs that feed many occupations (arts, science, general degrees) are judged on one of them. That is why History, English and French show a shortage risk: their strongest-linked occupation happens to be in shortage.'],
+     ['L2','Most programs have no COPS signal',`${RAW.filter(r=>r.pv==='Insufficient signal').length} of ${RAW.length} programs have "insufficient signal" for COPS shortage or surplus. Absence of a shortage flag is not evidence of weak demand.`],
+     ['L3','The LMA signal is a composite','The same outlook pair maps to different LMA values (for example "Good" + "Strong shortage" appears as LMA 0, 1, 2 and 3), so the signal also reflects CIP–NOC link strength. Its construction is not documented in the workbook; record it in the Template 7 method note.'],
+     ['L4','Graduate programs share undergraduate mappings','CIP–NOC links are built mostly from bachelor\'s graduates. Research master\'s and PhD outcomes (academia, research roles) are poorly captured, so their signals are weak or missing.'],
+     ['L5','Different horizons','NS employment prospects cover 3 years (2024-26); COPS projects 10 years (2024-33). A program can look strong on one and neutral on the other.'],
+     ['L6','Missing column',`The "Employment prospects" column (AG) is empty for all programs. If it was meant to hold the weighted employment % or coverage score from the CIP–NOC file, adding it would let link strength be shown directly.`]
+    ].map(([id,t,b])=>`<article class="skew"><div class="skew-h"><span class="chip m">${id}</span><h3>${t}</h3></div><p>${b}</p></article>`).join('')}</div></section>
+  </div>`;
+  bindSeg(v,'lens',x=>{P.lm=x; $('pLm').value=x; F.lmg='All'; store.set('P',P); render();});
+  bindSeg(v,'lmf',x=>{lmTblF=x; render();});
+  drawLMShift($('lmShift')); drawLMCost($('lmCost')); drawLMSupply($('lmSupply')); drawLMPipe($('lmPipe')); drawLMFac($('lmFac')); drawLMCons($('lmCons'));
+}
+function drawLMShift(el){
+  const L=LENS[P.lm]; const rows=L.groups.map((g,i)=>{const a=VIS.filter(r=>r.lmg===i);return {g,i,a,e21:sum(a,r=>r.e21),e24:sum(a,r=>r.e24)};});
+  const W_=560,rh=46,m={l:150,r:118,t:20,b:26},H=m.t+rows.length*rh+m.b; const mx=Math.max(10,...rows.flatMap(r=>[r.e21,r.e24])); const xt=nice(0,mx,4); const x=lin(0,Math.max(mx*1.04,xt[xt.length-1]),m.l,W_-m.r);
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Enrolment shift by labour-market group"><g class="grid">${xt.map(t=>`<line x1="${x(t)}" x2="${x(t)}" y1="${m.t-6}" y2="${H-m.b}"/>`).join('')}</g>`+xt.map(t=>`<text x="${x(t)}" y="${H-8}" text-anchor="middle">${fN(t)}</text>`).join('');
+  s+=`<text x="${m.l}" y="${m.t-8}" class="mut" style="font-size:10px">○ 2021-22   ● 2024-25</text>`;
+  rows.forEach((r,i)=>{ const cy=m.t+i*rh+rh/2; const d=r.e24-r.e21, p=r.e21?d/r.e21:null; const c=LMC[i];
+    s+=`<text x="${m.l-10}" y="${cy+4}" text-anchor="end" class="ink">${esc(r.g)}</text><text x="${m.l-10}" y="${cy+17}" text-anchor="end" style="font-size:10px">${r.a.length} programs</text>`;
+    s+=`<line x1="${x(r.e21)}" x2="${x(r.e24)}" y1="${cy}" y2="${cy}" style="stroke:${c}" stroke-width="4" stroke-linecap="round"/>`;
+    s+=`<circle cx="${x(r.e21)}" cy="${cy}" r="6" style="fill:var(--panel);stroke:${c}" stroke-width="2"/><circle ${tipAttr(`<b>${esc(r.g)}</b><div class="kv"><span>2021-22</span><span>${fN(r.e21)}</span><span>2024-25</span><span>${fN(r.e24)}</span><span>Change</span><span>${d>0?'+':''}${fN(d)} (${fPs(p)})</span><span>Contribution</span><span>${f$(sum(r.a,q=>q.mar))}</span></div>`)} cx="${x(r.e24)}" cy="${cy}" r="7" style="fill:${c};stroke:var(--panel)" stroke-width="2"/>`;
+    s+=`<text x="${W_-m.r+10}" y="${cy+4}" class="ink" style="font-weight:700;fill:${d>=0?'var(--good)':'var(--crit)'}">${d>0?'+':''}${fN(d)} (${fPs(p)})</text>`; });
+  const tot=sum(VIS,r=>r.e24-r.e21); const top=rows.slice(0,2); const gain=sum(top,r=>r.e24-r.e21);
+  el.innerHTML=s+'</svg>'+`<p class="note">Net change ${tot>0?'+':''}${fN(tot)} students; the two stronger groups account for ${gain>0?'+':''}${fN(gain)}.</p>`;
+}
+function drawLMCost(el){
+  const L=LENS[P.lm]; const rows=L.groups.map((g,i)=>{const a=VIS.filter(r=>r.lmg===i);const chp=sum(a,r=>r.chp),mar=sum(a,r=>r.mar);return {g,i,a,mpc:chp?mar/chp:null,mar,rec:sum(a,r=>r.cost)?sum(a,r=>r.rev)/sum(a,r=>r.cost):null};});
+  const W_=560,rh=46,m={l:150,r:120,t:14,b:26},H=m.t+rows.length*rh+m.b; const lo=Math.min(-100,...rows.map(r=>r.mpc||0)), hi=Math.max(100,...rows.map(r=>r.mpc||0)); const xt=nice(lo,hi,4); const x=lin(Math.min(lo,xt[0]),Math.max(hi,xt[xt.length-1]),m.l,W_-m.r);
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Contribution by labour-market group"><g class="grid">${xt.map(t=>`<line x1="${x(t)}" x2="${x(t)}" y1="${m.t}" y2="${H-m.b}"/>`).join('')}</g><line class="ax" x1="${x(0)}" x2="${x(0)}" y1="${m.t}" y2="${H-m.b}"/>`+xt.map(t=>`<text x="${x(t)}" y="${H-8}" text-anchor="middle">${fC(t)}</text>`).join('');
+  rows.forEach((r,i)=>{ const yy=m.t+i*rh+10, h=rh-20; if(r.mpc==null) return; const x0=Math.min(x(0),x(r.mpc)), w=Math.abs(x(r.mpc)-x(0));
+    s+=`<text x="${m.l-10}" y="${yy+h/2+4}" text-anchor="end" class="ink">${esc(r.g)}</text>`;
+    s+=`<rect ${tipAttr(`<b>${esc(r.g)}</b><div class="kv"><span>Contribution / CHP</span><span>${fC(r.mpc)}</span><span>Total</span><span>${f$(r.mar)}</span><span>Tuition coverage</span><span>${fP(r.rec,0)}</span></div>`)} x="${x0}" y="${yy}" width="${Math.max(1,w)}" height="${h}" rx="3" style="fill:${r.mpc>=0?'var(--hi)':'var(--lo)'}"/>`;
+    s+=`<text x="${W_-m.r+10}" y="${yy+h/2}" class="ink" style="font-size:11px;font-weight:600">${fC(r.mpc)} / CHP</text><text x="${W_-m.r+10}" y="${yy+h/2+13}" style="font-size:10.5px">${f$(r.mar)} · ${fP(r.rec,0)} cov.</text>`; });
+  el.innerHTML=s+'</svg>'+`<p class="note">Per credit hour, before the operating grant (see Costing model, M4–M5). Health and professional programs dominate the stronger groups, so their delivery cost and clinical revenue outside the model drive these figures.</p>`;
+}
+function drawLMSupply(el){
+  const L=LENS[P.lm]; const a=VIS.filter(r=>r.tr!=null&&r.e24).sort((p,q)=>sizeVal(q)-sizeVal(p));
+  const W_=1000,rh=86,m={l:170,r:20,t:14,b:40},H=m.t+L.groups.length*rh+m.b; const xl=-40,xh=40; const x=lin(xl,xh,m.l,W_-m.r); const cut=P.grow;
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Supply response">`;
+  L.groups.forEach((g,i)=>{ const y0=m.t+i*rh; if(i<=1) s+=`<rect x="${m.l}" y="${y0}" width="${x(cut)-m.l}" height="${rh}" style="fill:color-mix(in srgb,var(--c-rat) 12%,transparent)"/>`; if(i===2) s+=`<rect x="${x(cut)}" y="${y0}" width="${W_-m.r-x(cut)}" height="${rh}" style="fill:color-mix(in srgb,var(--warn) 10%,transparent)"/>`;
+    s+=`<line x1="${m.l}" x2="${W_-m.r}" y1="${y0+rh}" y2="${y0+rh}" style="stroke:var(--line)"/>`;
+    const gg=a.filter(r=>r.lmg===i); const dec=gg.filter(r=>r.tr*100<cut), gro=gg.filter(r=>r.tr*100>=cut);
+    s+=`<rect x="${m.l-162}" y="${y0+rh/2-14}" width="10" height="10" rx="2" style="fill:${LMC[i]}"/><text x="${m.l-146}" y="${y0+rh/2-5}" class="ink" style="font-weight:600">${esc(g)}</text><text x="${m.l-146}" y="${y0+rh/2+9}" style="font-size:10px">↓ ${dec.length} (${fN(sum(dec,r=>r.e24))} st.)</text><text x="${m.l-146}" y="${y0+rh/2+22}" style="font-size:10px">↑ ${gro.length} (${fN(sum(gro,r=>r.e24))} st.)</text>`; });
+  const xt=[-40,-30,-20,-10,0,10,20,30,40]; s+=`<g class="grid">${xt.map(t=>`<line x1="${x(t)}" x2="${x(t)}" y1="${m.t}" y2="${H-m.b}"/>`).join('')}</g>`+xt.map(t=>`<text x="${x(t)}" y="${H-m.b+16}" text-anchor="middle">${t===xl?'≤':t===xh?'≥':''}${t>0?'+':''}${t}%</text>`).join('');
+  s+=`<line class="ax" x1="${x(cut)}" x2="${x(cut)}" y1="${m.t}" y2="${H-m.b}"/><text x="${(m.l+W_)/2}" y="${H-6}" text-anchor="middle" class="mut">Enrolment CAGR (${P.trend==='c3'?'3-year':'10-year'})</text>`;
+  a.forEach(r=>{ const i=r.lmg; const cy=m.t+i*rh+rh/2+(hash(r.id)-.5)*rh*.72; const cx=x(Math.max(xl,Math.min(xh,r.tr*100)));
+    s+=`<circle class="hit" data-id="${r.id}" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad(r,16).toFixed(1)}" style="fill:${r.above==null?'var(--nc)':r.above?'var(--hi)':'var(--lo)'};fill-opacity:.75;stroke:var(--panel)" stroke-width="1"/>`; });
+  const vul=a.filter(r=>r.lmg<=1&&r.tr*100<cut);
+  el.innerHTML=s+'</svg>'+`<p class="note"><b>${vul.length}</b> stronger-signal programs are declining (${fN(sum(vul,r=>r.e24))} students), led by ${topNames(vul,r=>r.e24,4)}. Programs without a trend are not shown.</p>`;
+}
+function drawLMPipe(el){
+  let a=VIS.filter(r=>/Shortage/.test(r.pv));
+  const flags=r=>{const f=[]; if((r.c3!=null&&r.c3<0)||r.grad==='Decreasing') f.push(['fall','Supply falling','r']); if(r.ms===1) f.push(['sole','Sole NS provider','o']); if(r.growing&&r.above) f.push(['grow','Expand candidate','o']); if(r.above===false) f.push(['cost','Costly to grow','r']); if(r.teach) f.push(['teach',r.st,'']); return f;};
+  if(lmTblF!=='all') a=a.filter(r=>flags(r).some(f=>f[0]===lmTblF));
+  a=a.slice().sort((p,q)=>(q.e24||0)-(p.e24||0));
+  el.innerHTML=`<div class="tblwrap"><table><thead><tr><th>Program</th><th>Faculty</th><th>COPS</th><th>Outlook</th><th class="n">Students</th><th class="n">3-yr</th><th class="n">10-yr</th><th>Credentials</th><th class="n">NS share</th><th>NS market</th><th class="n">Contribution</th><th>Category</th><th>Flags</th></tr></thead><tbody>
+  ${a.map(r=>`<tr><td><span data-id="${r.id}" style="cursor:help">${esc(r.nm)}</span></td><td>${esc(r.fac)}</td><td>${/Strong/.test(r.pv)?'<b>Strong</b>':'Moderate'}</td><td>${esc(r.emp)}</td><td class="n">${fN(r.e24)}</td><td class="n ${r.c3==null?'':r.c3>=0?'pos':'neg'}">${fPs(r.c3)}</td><td class="n ${r.c10==null?'':r.c10>=0?'pos':'neg'}">${fPs(r.c10)}</td><td>${esc(r.grad)}</td><td class="n">${fP(r.ms,0)}</td><td>${esc(r.mkt.replace(' market',''))}</td><td class="n">${f$(r.mar)}</td><td><span class="cat"><i style="background:${CATC[r.cat]}"></i>${r.cat}</span></td><td>${flags(r).map(f=>`<span class="chip ${f[2]}">${esc(f[1])}</span>`).join('')}${skewsFor(r).map(mchip).join('')}</td></tr>`).join('')||'<tr><td colspan="13" class="empty">No shortage-aligned programs in this filter.</td></tr>'}
+  </tbody></table></div><p class="note">${a.length} programs shown. "Supply falling": 3-yr enrolment CAGR below zero or credentials decreasing. "Expand candidate": growing and at or above the margin line. "Costly to grow": below the margin line, so growth deepens the contribution gap unless targeted funding follows.</p>`;
+}
+function drawLMFac(el){
+  const L=LENS[P.lm]; const pool=ALL.filter(r=>(F.lv==='All'||r.lv===F.lv)&&(F.cat==='All'||r.cat===F.cat)&&(F.teach||!r.teach));
+  const rows=FACS.map(f=>{const a=pool.filter(r=>r.fac===f);const s=a.filter(r=>r.lmg<=1);return {f,a,e:sum(a,r=>r.e24),d:sum(s,r=>r.e24-r.e21),sh:sum(a,r=>r.e24)?sum(s,r=>r.e24)/sum(a,r=>r.e24):0};}).filter(r=>r.e).sort((p,q)=>q.sh-p.sh);
+  const W_=560,rh=26,m={l:150,r:60,t:4,b:8},H=m.t+rows.length*rh+m.b;
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Faculty labour-market profile">`;
+  rows.forEach((r,i)=>{ const yy=m.t+i*rh; let x0=m.l; s+=`<text x="${m.l-8}" y="${yy+15}" text-anchor="end" class="ink" style="${r.f===F.fac?'font-weight:700':''}">${esc(r.f)}</text>`;
+    L.groups.forEach((g,gi)=>{ const a=r.a.filter(p=>p.lmg===gi); const val=sum(a,p=>p.e24); const w=val/r.e*(W_-m.l-m.r); if(w<=0) return;
+      s+=`<rect ${tipAttr(`<b>${esc(r.f)} · ${esc(g)}</b><div class="kv"><span>Students</span><span>${fN(val)} (${fP(val/r.e,0)})</span><span>Programs</span><span>${a.length}</span><span>Change since 21-22</span><span>${fN(sum(a,p=>p.e24-p.e21))}</span></div>`)} x="${x0+1}" y="${yy+3}" width="${Math.max(0,w-2)}" height="${rh-8}" rx="2" style="fill:${LMC[gi]}"/>`; x0+=w; });
+    s+=`<text x="${W_-m.r+6}" y="${yy+15}" style="font-size:10.5px;fill:${r.d>=0?'var(--good)':'var(--crit)'}">${r.d>0?'+':''}${r.d}</text>`; });
+  el.innerHTML=s+'</svg>'+`<p class="note">Right-hand figure: change in students in the two stronger groups since 2021-22. Faculties ordered by stronger-signal share.</p>`;
+}
+function drawLMCons(el){
+  const R=[['Very good',r=>r.emp==='Very good'],['Good',r=>r.emp==='Good'],['Moderate / limited',r=>r.emp==='Moderate'||r.emp==='Limited'],['Undetermined / no data',r=>!['Very good','Good','Moderate','Limited'].includes(r.emp)]];
+  const C=[['Strong shortage',r=>/Strong risk of Shortage/.test(r.pv)],['Moderate shortage',r=>/Moderate risk of Shortage/.test(r.pv)],['Insufficient',r=>r.pv==='Insufficient signal'],['Other / none',r=>!/Shortage/.test(r.pv)&&r.pv!=='Insufficient signal']];
+  const emax=Math.max(1,...R.flatMap(([,rf])=>C.map(([,cf])=>sum(VIS.filter(r=>rf(r)&&cf(r)),r=>r.e24))));
+  let h=`<div class="tblwrap" style="max-height:none"><table class="matrix"><thead><tr><th style="text-align:left">Outlook ↓ · COPS →</th>${C.map(c=>`<th>${c[0]}</th>`).join('')}</tr></thead><tbody>`;
+  R.forEach(([rl,rf])=>{ h+=`<tr><th style="text-align:left;position:static">${rl}</th>`; C.forEach(([cl,cf])=>{ const g=VIS.filter(r=>rf(r)&&cf(r)); if(!g.length){h+='<td style="color:var(--muted)">–</td>';return;}
+      const e=sum(g,r=>r.e24); const dist=[1,2,3,0].map(k=>g.filter(r=>(k===3?(r.lma===3||r.lma===4):k===0?!(r.lma>=1):r.lma===k)).length);
+      const bar=`<svg viewBox="0 0 60 8" style="width:60px;display:block;margin:3px auto 0">${(()=>{let x0=0;return dist.map((n,k)=>{const w=n/g.length*60;const o=w?`<rect x="${x0}" y="0" width="${Math.max(0,w-1)}" height="8" rx="1" style="fill:${LMC[k]}"/>`:'';x0+=w;return o;}).join('')})()}</svg>`;
+      h+=`<td ${tipAttr(`<b>${rl} outlook · ${cl}</b><div class="kv"><span>Programs</span><span>${g.length}</span><span>Students</span><span>${fN(e)}</span><span>LMA 1 / 2 / 3–4 / 0</span><span>${dist.join(' / ')}</span></div><div style="margin-top:4px;color:var(--muted)">${g.slice().sort((p,q)=>(q.e24||0)-(p.e24||0)).slice(0,6).map(r=>esc(r.nm)+' · LMA '+(r.lma??'–')).join('<br>')}</div>`)} style="background:color-mix(in srgb,var(--hi) ${Math.round(e/emax*40)}%,var(--panel));line-height:1.2"><b>${g.length}</b><br><span style="font-size:.72rem">${fN(e)} st.</span>${bar}</td>`; }); h+='</tr>'; });
+  const odd=VIS.filter(r=>(r.lma===0||r.lma==null)&&(['Very good','Good'].includes(r.emp))&&(r.e24||0)>=50).sort((p,q)=>q.e24-p.e24);
+  el.innerHTML=h+`</tbody></table></div><div class="legend"><span>Mini-bars: LMA</span>${['1','2','3–4','0'].map((g,i)=>`<span><i style="background:${LMC[i]}"></i>${g}</span>`).join('')}</div><p class="note"><b>Large programs with a good outlook but no LMA signal:</b> ${odd.length?odd.slice(0,5).map(r=>`${esc(r.nm)} (${fN(r.e24)})`).join(', '):'none in this filter'}. A reviewer reading the raw outlook will see these as well aligned; document why the composite gives no signal.</p>`;
+}
+
+
+Object.assign(STORY,{
+ lmmix:{h:'Are labour-market priorities also financially healthy?',tell:'Splits the quadrant mix by labour-market group. If the strongest-signal rows are mostly blue (above the line), labour-market alignment and financial health point the same way and growth is easy to justify. If they are mostly red, the programs government most wants are the ones tuition does not cover, and the case for growth needs targeted funding.',look:['The share of red (below line) in the top two rows.','Whether the "No signal" row is large: activity whose labour-market case is unmade.','The enrolment change at the right of each row.'],links:['O4','R8','R10'],m:['M4','M5'],read:'Rows are labour-market groups under the current lens; segments are quadrants. Right: program and student counts, change since 2021-22, and total contribution.',live:()=>{ const a=VIS.filter(r=>r.lmg<=1); const b=a.filter(r=>r.above===false); return `In the two stronger groups, <b>${pctOf(sum(b,r=>r.e24),sum(a,r=>r.e24))}</b> of students are in below-line programs.`; }},
+ lmkpi:{h:'Labour-market alignment at a glance',tell:'The headline indicators a government reviewer is likely to start from: how much of the student body is in programs with strong labour-market evidence, whether that share is growing, and how much activity has no evidence at all.',look:['Growth in stronger-signal programs against total growth.','Shortage programs with falling enrolment: the clearest vulnerability.','The no-signal share: evidence still to be assembled.'],links:['O4','R9','R10'],m:[],read:'Figures follow the lens and filters. Dal share of NS credentials uses 2024 credentials in stronger-signal programs.',live:()=>''},
+ lmshift:{h:'Is the portfolio moving toward demand?',tell:'Compares where students were in 2021-22 with where they are now, by labour-market group. Growth concentrated in the stronger groups is evidence the portfolio is already responding to labour-market need; growth in weaker or no-signal groups is a vulnerability.',look:['Which group gained most students in absolute terms.','Whether the no-signal group is shrinking or growing.','Switch lens to COPS: shortage-aligned growth is a sharper test.'],links:['O4'],m:[],read:'Hollow dot: 2021-22. Solid dot: 2024-25. Label: change in students and per cent.',live:()=>''},
+ lmcost:{h:'Alignment has a price',tell:'Shows the instructional contribution of each labour-market group. The strongest-demand fields at Dalhousie are largely health and professional programs with high delivery cost and clinical revenue outside the model, so they often show the weakest contribution. The finding is not that these programs are inefficient: it is that labour-market priorities need funding beyond tuition.',look:['Whether contribution per CHP falls as labour-market strength rises.','Total contribution of the strongest group against its growth on the left.'],links:['R8'],m:['M4','M5','M6'],read:'Bars: contribution per credit hour (blue positive, red negative). Right: per-CHP figure, total contribution and tuition coverage.',live:()=>''},
+ lmsupply:{h:'Where supply moves against the signal',tell:'The program-level view. Left of the line in the stronger rows (shaded) is the main vulnerability: programs feeding occupations with good prospects or shortages are losing students. Right of the line in the weaker row is the watch zone: growth where labour-market evidence is weak. Colour adds the economics: a red dot in the shaded zone is both under-supplying demand and costly to fix.',look:['Large dots in the shaded zones.','Blue dots in the strongest row right of the line: expand candidates.','The no-signal row: decide whether to build the evidence or accept the risk.'],links:['R9','O4','O3'],m:['M2','M5'],read:'Rows: labour-market groups. X: enrolment CAGR. Size: bubble-size setting. Colour: margin line. Counts at left: declining (↓) and growing (↑) programs and students.',live:()=>{ const v=VIS.filter(r=>r.tr!=null&&r.lmg<=1&&r.tr*100<P.grow); return `<b>${v.length}</b> stronger-signal programs are declining (${fN(sum(v,r=>r.e24))} students).`; }},
+ lmpipe:{h:'The shortage pipeline',tell:'Lists every program linked to an occupation with a COPS shortage risk, with its supply trend, provincial position and economics. Flags turn it into a work list: falling supply (vulnerability), sole NS provider (strategic responsibility), expand candidates (opportunity) and costly to grow (needs funding).',look:['"Supply falling" with "Sole NS provider": no other NS institution fills the gap.','"Expand candidate": growing and at or above the margin line.','Arts programs flagged shortage: check the occupation mapping (L1).'],links:['R8','R9','O2'],m:['M5'],read:'Use the flag buttons to filter. Violet chips are costing-method caveats.',live:()=>''},
+ lmfac:{h:'Which faculties carry the labour-market case?',tell:'Shows how each faculty\'s students divide across labour-market groups. Faculties with large no-signal shares have the most evidence to build; faculties gaining stronger-signal students are carrying the portfolio\'s alignment story.',look:['Faculties dominated by grey (no signal).','Negative figures at the right: shrinking stronger-signal enrolment.'],links:['O4','R10'],m:[],read:'Bars: share of students by group. Right: change in stronger-signal students since 2021-22.',live:()=>''},
+ lmcons:{h:'Is the evidence consistent?',tell:'The LMA signal is an institutional composite. This matrix sets it against the two raw sources a reviewer can check independently. Cells where a good outlook or a shortage flag sits beside LMA 0 or 3 need an explanation; so do strong LMA signals in cells with a moderate outlook and no COPS signal.',look:['Grey (LMA 0) in the top-left cells.','Large programs listed under the table.'],links:['R10'],m:[],read:'Cell shade: students. Mini-bar: spread of LMA signals in the cell.',live:()=>''},
+ lmread:{h:'Limits of the labour-market evidence',tell:'States what the signals can and cannot carry, so labour-market findings are presented with the right confidence and are not over-read in either direction.',look:['L1 and L3 before citing a shortage flag for a general degree.'],links:['R10'],m:[],read:'Each card is one limitation.',live:()=>''}
+});
+Object.assign(CHART,{lmmix:'Quadrant mix by labour market',lmkpi:'Labour-market KPIs',lmshift:'Enrolment shift by signal',lmcost:'Cost of alignment',lmsupply:'Supply response',lmpipe:'Shortage pipeline',lmfac:'Faculty labour-market profile',lmcons:'Signal consistency',lmread:'Reading the signals'});
 
 initControls(); render();

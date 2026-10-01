@@ -6,7 +6,7 @@ const QUADS = ['High / growing','High / declining','Low / growing','Low / declin
 const QC = {'High / growing':'var(--hi)','High / declining':'var(--hi-lt)','Low / growing':'var(--lo)','Low / declining':'var(--lo-lt)','Not charted':'var(--nc)'};
 const LEVELS = ['UG','Masters','Doctoral','Diploma/Tech','Post-bacc'];
 const FACS = [...new Set(RAW.map(r=>r.fac))].sort();
-const TABS = [['brief','Briefing'],['portfolio','Portfolio'],['quadrants','Quadrants'],['faculties','Faculties'],['programs','Programs'],['categories','Categories'],['scenarios','Scenarios']];
+const TABS = [['brief','Briefing'],['costing','Costing model'],['portfolio','Portfolio'],['quadrants','Quadrants'],['faculties','Faculties'],['programs','Programs'],['categories','Categories'],['scenarios','Scenarios']];
 const DEF_P = {trend:'c3',grow:0,marg:'thr',smUG:25,smGR:8,minN:0,size:'e24'};
 const DEF_W = {below:2,decl:1,sust:1,small:1,weak:1,share:1,grads:1,deficit:1, strong:2,short:1,grow:1,above:1,mkt:1,res:1};
 const DEF_S = {rev:8,mod:4,nc:0,rat:-100,vc:40,ratRec:60,eff:0,dropTeach:true};
@@ -20,6 +20,7 @@ let S = Object.assign({},DEF_S,store.get('S',{}));
 let F = {fac:'All',lv:'All',cat:'All',teach:true};
 let OV = store.get('OV',{});
 let tab = (location.hash||'').slice(1); if(!TABS.some(t=>t[0]===tab)) tab = store.get('tab','brief');
+let mFilter = '';
 let selId = null, matrixSel = null, wcWeight='n', histW='n', facSort={k:'mar',d:1}, progSort={k:'risk',d:-1}, cmpGroup='lv', mixW='n';
 
 /* ---------- formatting ---------- */
@@ -116,7 +117,7 @@ function render(){
   const t = totals(VIS);
   $('scope').textContent = `${VIS.length} of ${RAW.length} programs · ${fN(t.e24)} students · line: ${P.marg==='thr'?'table threshold':'$0'} · trend: ${P.trend==='c3'?'3-yr':'10-yr'}`;
   const v = $('view');
-  ({brief:vBrief,portfolio:vPortfolio,quadrants:vQuadrants,faculties:vFaculties,programs:vPrograms,categories:vCategories,scenarios:vScenarios})[tab](v);
+  ({brief:vBrief,costing:vCosting,portfolio:vPortfolio,quadrants:vQuadrants,faculties:vFaculties,programs:vPrograms,categories:vCategories,scenarios:vScenarios})[tab](v);
   decorateStories(v);
   v.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{ tab=b.dataset.goto; store.set('tab',tab); document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===tab)); render(); window.scrollTo({top:0}); });
 }
@@ -148,8 +149,8 @@ function kpis(t, base){
   <div class="kpi"><div class="l">Enrolment 2024-25</div><div class="v">${fN(t.e24)}</div><div class="d ${d>=0?'pos':'neg'}">${fPs(d)} since 2021-22</div></div>
   <div class="kpi"><div class="l">Program cost</div><div class="v">${f$(t.cost)}</div><div class="d">${fN(t.chp)} credit hours</div></div>
   <div class="kpi"><div class="l">Program revenue</div><div class="v">${f$(t.rev)}</div><div class="d">Net tuition + targeted funding</div></div>
-  <div class="kpi"><div class="l">Total margin</div><div class="v ${t.mar>=0?'pos':'neg'}">${f$(t.mar)}</div><div class="d">${fC(t.mpc)} per CHP</div></div>
-  <div class="kpi"><div class="l">Cost recovery</div><div class="v">${fP(t.rec,0)}</div><div class="d">Revenue ÷ cost</div></div></div>`;
+  <div class="kpi"><div class="l">Instructional contribution</div><div class="v ${t.mar>=0?'pos':'neg'}">${f$(t.mar)}</div><div class="d">${fC(t.mpc)} per CHP · before operating grant</div></div>
+  <div class="kpi"><div class="l">Tuition coverage</div><div class="v">${fP(t.rec,0)}</div><div class="d">Revenue ÷ costed instruction only</div></div></div>`;
 }
 function seg(name, opts, val){ return `<div class="seg" data-seg="${name}">${opts.map(([k,l])=>`<button type="button" data-v="${k}" aria-pressed="${k===val}">${l}</button>`).join('')}</div>`; }
 function bindSeg(root, name, fn){ const s=root.querySelector(`[data-seg="${name}"]`); if(s) s.onclick=e=>{const b=e.target.closest('button'); if(b) fn(b.dataset.v);}; }
@@ -158,7 +159,7 @@ const legendC = () => `<div class="legend">${CATS.map(c=>`<span><i style="backgr
 
 /* ================= STORY TOOLTIPS ================= */
 const FINDINGS = [
- ['R1','r','The portfolio recovers 84% of its program cost.','Program revenue here is net tuition plus targeted funding only, so the $45.9M gap is what the operating grant and other income must cover. Read every $0 line as "self-funding on tuition", not break-even.','portfolio'],
+ ['R1','r','Tuition covers 84% of the instructional cost the model counts.','The model counts about 47% of operating spending and only net credit tuition as revenue, so the $45.9M gap is a contribution shortfall before the operating grant, not a deficit, and says nothing about the size of the grant. Read every $0 line as "self-funding on tuition", not break-even. See the Costing model tab.','costing'],
  ['R2','r','"High margin" is not the same as "makes money".','The 62 programs in the high-margin / growing quadrant net −$0.2M combined, because the line sits at −$100/CHP (Table 2) or −$1,000/CHP (Table 1, thesis graduate). Only 51 programs have a positive dollar margin. Switch the margin line to $0 to see the difference.','quadrants'],
  ['R3','r','The surplus is concentrated and fragile.','Ten programs produce $23.8M of the $30.9M in positive margin. Three Computer Science programs alone produce $15.1M, and two of them are shrinking on a 3-year basis (BCS −2.1%/yr, MACS −5.9%/yr).','portfolio'],
  ['R4','r','Growth is landing in programs that lose money.','Net enrolment rose by 640 students since 2021-22. 525 of them (82%) went to programs with a negative dollar margin, mostly in Health (+430) and Medicine (+187). The guide (p. 118) names this exact pattern as a portfolio-balance risk.','faculties'],
@@ -229,8 +230,8 @@ function storyHTML(k, part){
   const s=STORY[k]; if(!s) return null;
   let live=''; try{ live=s.live?s.live():''; }catch(e){ live=''; }
   const liveBox = live?`<div class="st-live"><span>In the current view</span>${live}</div>`:'';
-  if(part==='legend') return `<div class="st"><div class="st-k">How to read it</div><p>${s.read}</p>${liveBox}</div>`;
-  return `<div class="st"><div class="st-k">The story</div><b>${s.h}</b><p>${s.tell}</p><div class="st-k">Look for</div><ul>${s.look.map(x=>`<li>${x}</li>`).join('')}</ul>${liveBox}${s.links.length?`<div class="st-k">Briefing points</div>${s.links.map(id=>{const f=FIND[id];return `<div class="st-f"><span class="tag ${f[1]}">${id}</span>${f[2]}</div>`}).join('')}`:''}</div>`;
+  if(part==='legend') return `<div class="st"><div class="st-k">How to read it</div><p>${s.read}</p>${liveBox}${s.m&&s.m.length?`<div class="st-k">Method caveats</div><p>${s.m.join(', ')}: see Costing model.</p>`:''}</div>`;
+  return `<div class="st"><div class="st-k">The story</div><b>${s.h}</b><p>${s.tell}</p><div class="st-k">Look for</div><ul>${s.look.map(x=>`<li>${x}</li>`).join('')}</ul>${liveBox}${(s.m&&s.m.length&&typeof SKEWBY!=='undefined')?`<div class="st-k">Method caveats</div>${s.m.map(id=>{const k=SKEWBY[id];return `<div class="st-f"><span class="tag m">${id}</span>${esc(k.t)} <span style="color:${DIR[k.dir][1]}">(${DIR[k.dir][0].toLowerCase()})</span></div>`}).join('')}`:''}${s.links.length?`<div class="st-k">Briefing points</div>${s.links.map(id=>{const f=FIND[id];return `<div class="st-f"><span class="tag ${f[1]}">${id}</span>${f[2]}</div>`}).join('')}`:''}</div>`;
 }
 function decorateStories(root){
   root.querySelectorAll('[data-s]').forEach(sec=>{
@@ -245,6 +246,10 @@ function decorateStories(root){
 function vBrief(v){
   v.innerHTML = `
   <div class="brief">
+   <section class="panel readfirst" style="grid-column:1/-1">
+    <h2>Read first: what "margin" means here</h2>
+    <p class="sub" style="max-width:100ch">Program costing counts about ${FI?fP(MODEL.cost/(FI.dal.go*1e6),0):'half'} of Dalhousie's operating spending and only net credit tuition as revenue. The operating grant, physical plant, IT, student services and all research funds sit outside it. Every margin in this tool is an <b>instructional contribution before the operating grant and institutional costs</b>: use it to compare programs with each other, never to size a grant or a deficit. Method caveats M1–M8 mark where the method skews Dalhousie's results, and they are tagged wherever those skews show up. <button type="button" class="linkbtn" data-goto="costing">Open Costing model →</button></p>
+   </section>
    <section class="panel" style="grid-column:1/-1">
     <h2>What the distributions show</h2>
     <p class="sub">Whole portfolio, file defaults (margin measured against the costing-table threshold, 3-year enrolment trend). Tags mark risk (R) or opportunity (O). Each finding lists the charts that show it; in every other tab, hover a chart's title, subtitle or legend to read the story it tells and the briefing points it supports.</p>
@@ -301,7 +306,7 @@ function vBrief(v){
 /* ================= PORTFOLIO ================= */
 function vPortfolio(v){
   const base = totals(ALL.filter(r=>F.teach||!r.teach)), t = totals(VIS);
-  v.innerHTML = kpis(t, base) + `
+  v.innerHTML = scopeBanner() + kpis(t, base) + `
   <div class="grid g2">
    <section data-s="whale" class="panel" style="grid-column:1/-1"><header><div><h2>Cumulative margin curve</h2><p class="q">Programs ranked from largest surplus to largest deficit. The peak is the total surplus that funds everything to its right; the drop from the peak to the end point is the deficit it must absorb.</p></div>${seg('wc',[['n','By program count'],['chp','By credit hours']],wcWeight)}</header><div id="whale"></div></section>
    <section data-s="mix" class="panel"><header><div><h2>Quadrant mix, weighted four ways</h2><p class="q">The same programs, measured by count, students, credit hours and cost. A mix that shifts as you move down the rows means size and margin are correlated.</p></div></header><div id="mix"></div>${legendQ()}</section>
@@ -488,8 +493,8 @@ function vFaculties(v){
   v.innerHTML = `
   <div class="grid">
    <section data-s="facT" class="panel"><header><div><h2>Faculty scorecard</h2><p class="q">Totals use the level, category and teach-out filters but ignore the faculty filter, so every faculty stays comparable. Click a column to sort.</p></div></header>
-   <div class="tblwrap" style="max-height:none"><table id="facT"><thead><tr>${th('f','Faculty')}${th('n','Programs',1)}${th('e24','Students',1)}${th('d','Enrol. Δ 3-yr',1)}${th('rec','Cost recovery',1)}${th('mpc','Margin/CHP',1)}${th('mar','Total margin',1)}${th('belowSh','Students below line',1)}${th('smallSh','Programs subscale',1)}<th>Category mix (programs)</th></tr></thead><tbody>
-   ${rows.map(r=>`<tr${r.f===F.fac?' class="sel"':''}><td><b>${esc(r.f)}</b></td><td class="n">${r.n}</td><td class="n">${fN(r.e24)}</td><td class="n ${r.d>=0?'pos':'neg'}">${fPs(r.d)}</td><td class="n">${fP(r.rec,0)}</td><td class="n">${fC(r.mpc)}</td>
+   <div class="tblwrap" style="max-height:none"><table id="facT"><thead><tr>${th('f','Faculty')}${th('n','Programs',1)}${th('e24','Students',1)}${th('d','Enrol. Δ 3-yr',1)}${th('rec','Tuition coverage',1)}${th('mpc','Margin/CHP',1)}${th('mar','Contribution',1)}${th('belowSh','Students below line',1)}${th('smallSh','Programs subscale',1)}<th>Category mix (programs)</th></tr></thead><tbody>
+   ${rows.map(r=>`<tr${r.f===F.fac?' class="sel"':''}><td><b>${esc(r.f)}</b> ${SKEW.filter(x=>['M5','M6','M8'].includes(x.id)&&x.pred({fac:r.f})).map(mchip).join('')}</td><td class="n">${r.n}</td><td class="n">${fN(r.e24)}</td><td class="n ${r.d>=0?'pos':'neg'}">${fPs(r.d)}</td><td class="n">${fP(r.rec,0)}</td><td class="n">${fC(r.mpc)}</td>
    <td class="n"><svg viewBox="0 0 180 14" style="width:180px;display:inline-block;vertical-align:middle"><line x1="90" x2="90" y1="0" y2="14" class="ax"/><rect x="${r.mar<0?90-Math.abs(r.mar)/mmax*86:90}" y="2" width="${Math.max(1,Math.abs(r.mar)/mmax*86)}" height="10" rx="2" style="fill:${r.mar<0?'var(--lo)':'var(--hi)'}"/></svg> ${f$(r.mar)}</td>
    <td class="n">${fP(r.belowSh,0)}</td><td class="n">${fP(r.smallSh,0)}</td>
    <td><svg viewBox="0 0 120 12" style="width:120px">${(()=>{let x0=0;return r.mix.map((c,i)=>{const w=c/r.n*120;const o=w>0?`<rect ${tipAttr(`<b>${esc(r.f)}</b><br>${CATS[i]}: ${c} programs`)} x="${x0}" y="0" width="${Math.max(0,w-1)}" height="12" rx="2" style="fill:${CATC[CATS[i]]}"/>`:'';x0+=w;return o;}).join('')})()}</svg></td></tr>`).join('')}
@@ -535,7 +540,7 @@ function vPrograms(v){
   const a=VIS.slice(); const k=progSort.k, d=progSort.d;
   const val = (r) => k==='nm'||k==='fac'||k==='cat'? r[k] : (r[k]??-1e18);
   a.sort((p,q)=>(val(p)>val(q)?1:val(p)<val(q)?-1:0)*d);
-  const shown = a.filter(r=>!progQ || (r.nm+' '+r.full+' '+r.fac).toLowerCase().includes(progQ.toLowerCase()));
+  const shown = a.filter(r=>(!progQ || (r.nm+' '+r.full+' '+r.fac).toLowerCase().includes(progQ.toLowerCase())) && (!mFilter || (SKEWBY[mFilter].pred&&SKEWBY[mFilter].pred(r))));
   const th=(key,l,n)=>`<th class="${n?'n':''}" data-k="${key}">${l}${progSort.k===key?(progSort.d>0?' ↑':' ↓'):''}</th>`;
   v.innerHTML = `
   <div class="grid g2">
@@ -545,10 +550,10 @@ function vPrograms(v){
      <div><h3 style="color:var(--lo)">Risk flags</h3>${RISK.map(([k,l])=>wSlider(k,l)).join('')}</div>
      <div><h3 style="color:var(--hi)">Opportunity flags</h3>${OPP.map(([k,l])=>wSlider(k,l)).join('')}</div>
     </div></section>
-   <section data-s="progT" class="panel" style="grid-column:1/-1"><header><div><h2>Program screen</h2><p class="q">${shown.length} programs. Click a row for its peer comparison.</p></div><label class="ctl" for="pq">Search<input id="pq" type="search" value="${esc(progQ)}" placeholder="Program or faculty" style="font:inherit;font-size:.85rem;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);min-width:200px"></label></header>
+   <section data-s="progT" class="panel" style="grid-column:1/-1"><header><div><h2>Program screen</h2><p class="q">${shown.length} programs${mFilter?` with method caveat <b>${mFilter}</b> (${esc(SKEWBY[mFilter].t)})`:''}. Click a row for its peer comparison. Violet chips are method caveats (see Costing model).</p></div><div class="row"><label class="ctl" for="mf">Method caveat<select id="mf"><option value="">Any</option>${SKEW.filter(x=>x.pred).map(x=>`<option value="${x.id}"${x.id===mFilter?' selected':''}>${x.id} · ${esc(x.t)}</option>`).join('')}</select></label><label class="ctl" for="pq">Search<input id="pq" type="search" value="${esc(progQ)}" placeholder="Program or faculty" style="font:inherit;font-size:.85rem;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);min-width:200px"></label></div></header>
     <div class="tblwrap"><table id="progT"><thead><tr>${th('nm','Program')}${th('fac','Faculty')}${th('cat','Category')}${th('e24','Students',1)}${th('tr','Trend',1)}${th('mrel','Margin/CHP vs line',1)}${th('mar','Total margin',1)}${th('lma','LMA',1)}${th('risk','Risk',1)}${th('opp','Opp.',1)}<th>Flags</th></tr></thead><tbody>
     ${shown.map(r=>`<tr data-row="${r.id}"${r.id===selId?' class="sel"':''} style="cursor:pointer"><td title="${esc(r.full)}">${esc(r.nm)}${r.teach?' <span class="chip">'+esc(r.st)+'</span>':''}</td><td>${esc(r.fac)}</td><td><span class="cat"><i style="background:${CATC[r.cat]}"></i>${r.cat}</span></td><td class="n">${fN(r.e24)}</td><td class="n">${fPs(r.tr)}</td><td class="n ${r.mrel==null?'':r.mrel>=0?'pos':'neg'}">${r.mrel==null?'–':(r.mrel>0?'+':'')+fC(r.mrel)}</td><td class="n">${f$(r.mar)}</td><td class="n">${r.lma??'–'}</td><td class="n"><b>${r.risk}</b></td><td class="n"><b>${r.opp}</b></td>
-    <td>${RISK.filter(([k])=>r.R[k]&&W[k]).map(([k,l])=>`<span class="chip r">${l}</span>`).join('')}${OPP.filter(([k])=>r.O[k]&&W[k]).map(([k,l])=>`<span class="chip o">${l}</span>`).join('')}</td></tr>`).join('')}
+    <td>${skewsFor(r).map(mchip).join('')}${RISK.filter(([k])=>r.R[k]&&W[k]).map(([k,l])=>`<span class="chip r">${l}</span>`).join('')}${OPP.filter(([k])=>r.O[k]&&W[k]).map(([k,l])=>`<span class="chip o">${l}</span>`).join('')}</td></tr>`).join('')}
     </tbody></table></div></section>
    <section data-s="detail" class="panel" id="detail" style="grid-column:1/-1"></section>
   </div>`;
@@ -556,6 +561,7 @@ function vPrograms(v){
   $('wReset').onclick=()=>{W={...DEF_W};store.set('W',W);render();};
   $('progT').querySelector('thead').onclick=e=>{const t=e.target.closest('[data-k]'); if(!t) return; progSort={k:t.dataset.k,d:progSort.k===t.dataset.k?-progSort.d:(['nm','fac','cat'].includes(t.dataset.k)?1:-1)}; render();};
   $('progT').querySelector('tbody').onclick=e=>{const t=e.target.closest('[data-row]'); if(!t) return; selId=+t.dataset.row; render(); requestAnimationFrame(()=>$('detail').scrollIntoView({block:'start',behavior:'smooth'}));};
+  $('mf').onchange=e=>{mFilter=e.target.value; render();};
   $('pq').oninput=e=>{progQ=e.target.value; const pos=e.target.selectionStart; render(); const n=$('pq'); n.focus(); n.setSelectionRange(pos,pos);};
   drawRO($('ro')); drawDetail($('detail'));
 }
@@ -580,7 +586,7 @@ function drawDetail(el){
   const r = ALL.find(x=>x.id===selId);
   if(!r){ el.innerHTML='<h2>Peer comparison</h2><p class="empty">Click a program in the table or any chart to see where it sits in each distribution.</p>'; return; }
   const peers = ALL.filter(p=> cmpGroup==='lv'? p.lv===r.lv : cmpGroup==='fac'? p.fac===r.fac : true);
-  const mets=[['e24','2024-25 enrolment',fN,true],['c3','3-yr CAGR',fPs],['c10','10-yr CAGR',fPs],['mrel','Margin/CHP vs line',v=>(v>0?'+':'')+fC(v)],['mar','Total margin',f$],['costRec','Cost recovery',v=>fP(v,0)],['cr10','Credentials, 10-yr',fN,true]];
+  const mets=[['e24','2024-25 enrolment',fN,true],['c3','3-yr CAGR',fPs],['c10','10-yr CAGR',fPs],['mrel','Margin/CHP vs line',v=>(v>0?'+':'')+fC(v)],['mar','Total margin',f$],['costRec','Tuition coverage',v=>fP(v,0)],['cr10','Credentials, 10-yr',fN,true]];
   const W_=1000,rh=40,m={l:170,r:110,t:8},H=m.t+mets.length*rh+6;
   let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Peer distribution strips">`;
   mets.forEach(([k,l,fmt,log],i)=>{ const vals=peers.map(p=>p[k]).filter(v=>v!=null&&!isNaN(v)).sort((a,b)=>a-b); const cy=m.t+i*rh+rh/2; if(!vals.length) return;
@@ -597,6 +603,7 @@ function drawDetail(el){
   el.innerHTML = `<header><div><h2>${esc(r.nm)}</h2><p class="q">${esc(r.full)}</p></div>${seg('cmp',[['lv','vs same level'],['fac','vs same faculty'],['all','vs all programs']],cmpGroup)}</header>
   <div class="detail"><div class="meta"><span><b>${esc(r.fac)}</b> · ${esc(r.dept)}</span><span>${r.lv} · ${r.cred} · ${esc(r.th)}</span><span>Status: ${esc(r.st)}</span><span><span class="cat"><i style="background:${CATC[r.cat]}"></i>Agreed: ${r.cat}</span></span><span>Signal-implied: ${r.icat}</span><span>Quadrant: ${r.quad}</span><span>LMA ${r.lma??'–'} · ${esc(r.emp)} · ${esc(r.pv)}</span><span>NS share ${fP(r.ms,0)} · ${esc(r.mst)} · ${esc(r.mkt)}</span><span>Credentials: ${esc(r.grad)}</span>${r.res?'<span>Research-priority aligned</span>':''}</div>
   <div style="overflow-x:auto">${s}</svg></div>
+  ${(()=>{ const sk=skewsFor(r); return sk.length?`<div class="caveats"><div class="st-k">Method caveats that apply to this program</div>${sk.map(x=>`<div class="cv">${mchip(x)}<div><b>${esc(x.t)}</b> <span class="dir" style="color:${DIR[x.dir][1]};border-color:${DIR[x.dir][1]}">${DIR[x.dir][0]}</span><br><span style="color:var(--ink-2)">${esc(x.where)}</span></div></div>`).join('')}<div class="cv"><span class="chip m">M4</span><div><b>${esc(SKEWBY.M4.t)}</b> applies to every program; <b>M7</b> applies to every cost figure.</div></div></div>`:`<div class="caveats"><div class="st-k">Method caveats</div>Portfolio-wide caveats M4 and M7 apply. No program-specific caveat is flagged.</div>`; })()}
   <p class="note">Shaded band: middle 50% of the comparison group; vertical tick: median; ${cmpGroup!=='fac'?'blue dots: same-faculty programs; ':''}large dot: this program. Enrolment and credentials use a log scale.</p></div>`;
   bindSeg(el,'cmp',x=>{cmpGroup=x;render();});
 }
@@ -678,7 +685,7 @@ function vScenarios(v){
    </section>
    <section data-s="bridge" class="panel"><header><div><h2>Result</h2><p class="q">${base.n} programs in scope.</p></div></header>
     <div class="kpis" style="margin-top:0">
-     <div class="kpi"><div class="l">Total margin</div><div class="v ${st.mar>=0?'pos':'neg'}">${f$(st.mar)}</div><div class="d">from ${f$(base.mar)} · <b class="${st.mar-base.mar>=0?'pos':'neg'}">${st.mar-base.mar>=0?'+':''}${f$(st.mar-base.mar)}</b></div></div>
+     <div class="kpi"><div class="l">Instructional contribution</div><div class="v ${st.mar>=0?'pos':'neg'}">${f$(st.mar)}</div><div class="d">from ${f$(base.mar)} · <b class="${st.mar-base.mar>=0?'pos':'neg'}">${st.mar-base.mar>=0?'+':''}${f$(st.mar-base.mar)}</b></div></div>
      <div class="kpi"><div class="l">Cost recovery</div><div class="v">${fP(st.cost?st.rev/st.cost:null,0)}</div><div class="d">from ${fP(base.rec,0)}</div></div>
      <div class="kpi"><div class="l">Students</div><div class="v">${fN(st.e)}</div><div class="d">from ${fN(base.e24)}</div></div>
     </div>
@@ -708,5 +715,217 @@ function drawBridge(el,start,steps,end){
     if(i<bars.length-1){ s+=`<line x1="${x0+w}" x2="${x0+cw}" y1="${y(b.y1)}" y2="${y(b.y1)}" class="ref"/>`; } });
   el.innerHTML=s+'</svg>';
 }
+
+/* ================= COSTING MODEL (scope, peers, method skews) ================= */
+const FI = window.FIUC_DATA || null;
+const MODEL = {cost:284636896, rev:238756465}; // whole-portfolio program costing totals from the workbook (2024-25)
+const SKEW = [
+ {id:'M1', dir:'against', t:'Research effort is charged to teaching',
+  mech:'Only the teaching share of faculty salary is a direct cost. The step that builds the department overhead pool subtracts only that share (Guide Step 4l), so research and service time stays in department overhead and is spread over course sections. The more research-intensive the department, the more of its cost lands on the programs its courses serve.',
+  ev:()=>`Sponsored research spending is <b>${fP(FI.med.Dalhousie.ri,0)}</b> of Dal's operating spending vs <b>${fP(FI.med['Nova Scotia'].ri,0)}</b> for the NS median. Academic-rank salaries are only <b>${fP(FI.med.Dalhousie.acad_c01,0)}</b> of Dal's instruction & non-sponsored research function vs <b>${fP(FI.med['Nova Scotia'].acad_c01,0)}</b> for NS peers: the rest is research, technical and support staff that the model treats as teaching overhead.`,
+  where:'Thesis-based graduate programs and Medicine. Shows up as the deep negative tail in the margin histogram and the high threshold for costing Table 1.',
+  pred:r=>r.th==='Thesis Required'||r.fac==='Medicine'},
+ {id:'M2', dir:'against', t:'Overhead is split equally per section',
+  mech:'Department, faculty and university overhead pools are divided by the number of sections, not by students or credit hours (Step 4k–s). A 6-student seminar carries the same overhead as a 300-student lecture, so small sections look expensive per credit hour.',
+  ev:()=>`${RAW.filter(r=>['Masters','Doctoral'].includes(r.lv)).length} of Dal's ${RAW.length} programs (${fP(RAW.filter(r=>['Masters','Doctoral'].includes(r.lv)).length/RAW.length,0)}) are graduate programs, which run small sections. Primarily undergraduate NS peers have far fewer.`,
+  where:'Small graduate programs. Shows up in the size-band chart and the left tail of the margin histogram.',
+  pred:r=>r.isGrad&&(r.e24||0)<20},
+ {id:'M3', dir:'against', t:'Unfunded graduate awards reduce revenue',
+  mech:'Net tuition = tuition + program and course fees − unfunded scholarships and bursaries (Step 6c). Graduate funding packages paid from operating budgets can exceed the tuition they offset, producing low or negative program revenue.',
+  ev:()=>`Scholarships and bursaries are <b>${fP(FI.med.Dalhousie.schol_sh,1)}</b> of Dal's operating spending vs <b>${fP(FI.med['Nova Scotia'].schol_sh,1)}</b> NS median and <b>${fP(FI.med.U15.schol_sh,1)}</b> U15 median. ${RAW.filter(r=>r.rev<0).length} Dal programs report negative revenue.`,
+  where:'Research graduate programs; most visible where revenue is negative or under 20% of cost. Check the funded/unfunded split (Template 2.3 S6.1).',
+  pred:r=>(r.rev!=null&&r.rev<0)||(r.isGrad&&r.cost>0&&r.rev/r.cost<0.2)},
+ {id:'M4', dir:'against', t:'Only credit tuition counts as revenue',
+  mech:'Program revenue is net credit tuition plus targeted program grants (Step 6). The provincial operating grant, non-credit tuition, endowment income and sales of services are all excluded, although they fund the same operations.',
+  ev:()=>`Credit tuition is <b>${fP(FI.med.Dalhousie.tuit_sh,0)}</b> of Dal's operating revenue vs <b>${fP(FI.med['Nova Scotia'].tuit_sh,0)}</b> for the NS median, so the model sees a smaller share of Dal's income. Sales of services (${fP(FI.med.Dalhousie.sales_sh,1)} vs ${fP(FI.med['Nova Scotia'].sales_sh,1)}), endowment and investment (${fP(FI.med.Dalhousie.endow_sh,1)} vs ${fP(FI.med['Nova Scotia'].endow_sh,1)}) and non-credit tuition (${fP(FI.med.Dalhousie.nct_sh,1)} vs ${fP(FI.med['Nova Scotia'].nct_sh,1)}) are all larger at Dal.`,
+  where:'Every margin and the tuition-coverage figure. It is a portfolio-level effect, so no program chip.',
+  pred:null},
+ {id:'M5', dir:'against', t:'Clinical and professional revenue sits outside the model',
+  mech:'Clinic fees and other service revenue earned alongside teaching are "sales of services", not tuition, so they never reach the program. Clinic staff and supplies in faculty or department budgets can still flow into overhead.',
+  ev:()=>`Sales of services are <b>${f$(FI.dal.sales*1e6)}</b> (${fP(FI.med.Dalhousie.sales_sh,1)} of Dal's operating revenue) vs ${fP(FI.med['Nova Scotia'].sales_sh,1)} for the NS median.`,
+  where:'Dentistry (including Dental Hygiene and Periodontics) and Medicine. Shows up in the Faculties scorecard.',
+  pred:r=>r.fac==='Dentistry'||r.fac==='Medicine'},
+ {id:'M6', dir:'flatters', t:'Space, utilities and IT are excluded',
+  mech:'Physical plant, computing and communications, student services and external relations are excluded (Step 4g). Programs that use a lot of labs, clinics, studios or research computing look cheaper than they are.',
+  ev:()=>`Physical plant is ${fP(FI.med.Dalhousie.plant_sh,1)} of Dal's operating spending, close to the NS median (${fP(FI.med['Nova Scotia'].plant_sh,1)}), so this mostly shifts cost between Dal programs rather than against Dal as a whole.`,
+  where:'Assumed space-intensive faculties: Agriculture, Architecture and Planning, Dentistry, Engineering, Medicine. Their true cost is higher than shown.',
+  pred:r=>['Agriculture','Architecture and Planning','Dentistry','Engineering','Medicine'].includes(r.fac)},
+ {id:'M7', dir:'unknown', t:'Included spending does not reconcile to program cost',
+  mech:'The functions the model includes total far more than the program cost reported. Possible reasons: the year gap (FIUC 2023-24 vs costing 2024-25), Dal\'s optional unbundling of administration, research salary removed rather than pooled, or sections taken by students with no program of record.',
+  ev:()=>{ const inc=FI.dal.instr+FI.dal.library+FI.dal.admin; return `Included functions: <b>${f$(inc*1e6)}</b> (FIUC 2023-24). Program cost: <b>${f$(MODEL.cost)}</b> (2024-25). Gap: <b>${f$(inc*1e6-MODEL.cost)}</b>, ${fP((inc*1e6-MODEL.cost)/(inc*1e6),0)} of included spending.`; },
+  where:'Every cost figure. The Template 2.2 reconciliation (Step 8) should explain it; until it does, treat absolute levels with caution.',
+  pred:null},
+ {id:'M8', dir:'within', t:'A whole campus becomes faculty overhead',
+  mech:'Faculty-level overhead is pooled and split across that faculty\'s sections. Where a faculty runs a separate campus, campus-level administration and operations that are not plant can land in a pool spread over relatively few sections.',
+  ev:()=>{ const a=RAW.filter(r=>r.fac==='Agriculture'); return `Agriculture recovers ${fP(sum(a,r=>r.rev)/sum(a,r=>r.cost),0)} of costed instruction (${fC(sum(a,r=>r.mar)/sum(a,r=>r.chp))} per CHP), the lowest of any faculty. Hypothesis to verify against the faculty overhead pool.`; },
+  where:'Agricultural Campus programs.',
+  pred:r=>r.fac==='Agriculture'}
+];
+const SKEWBY = Object.fromEntries(SKEW.map(s=>[s.id,s]));
+const DIR = {against:['Disadvantages Dal vs NS peers','var(--lo)'], within:['Shifts cost between Dal programs','var(--warn)'], flatters:['Understates cost','var(--hi)'], unknown:['Direction unknown','var(--muted)']};
+const skewsFor = r => SKEW.filter(s=>s.pred&&s.pred(r));
+const mchip = s => `<span class="chip m" title="${esc(s.t)}">${s.id}</span>`;
+function scopeBanner(){
+  if(!FI) return '';
+  return `<div class="scope-banner" data-s="kpi"><b>Scope.</b> The costing model counts <b>${f$(MODEL.cost)}</b> of cost: <b>${fP(MODEL.cost/(FI.dal.go*1e6),0)}</b> of Dalhousie's ${f$(FI.dal.go*1e6)} operating spending and <b>${fP(MODEL.cost/(FI.dal.allfunds*1e6),0)}</b> of all-funds spending (FIUC ${FI.dal.year}). Its revenue is net credit tuition, about <b>${fP(MODEL.rev/(FI.dal.rev_go*1e6),0)}</b> of operating revenue. Contributions here are <b>before</b> the operating grant and the costs the model leaves out. <button type="button" class="linkbtn" data-goto="costing">How the model works →</button></div>`;
+}
+
+function vCosting(v){
+  if(!FI){ v.innerHTML='<p class="empty">FIUC comparison data not loaded.</p>'; return; }
+  const D=FI.dal, inc=D.instr+D.library+D.admin;
+  v.innerHTML = `
+  <div class="grid">
+   <section class="panel" data-s="cscope"><header><div><h2>What the costing model can and cannot tell you</h2><p class="q">Program costing (APR Guide, Workstream B) measures the instructional slice of the university and charges it to programs through the courses their students take. It is built for comparing programs with each other. It is not a full cost of the university, and its "margin" is not a surplus or deficit.</p></div></header>
+    <div class="kpis" style="margin-top:4px">
+     <div class="kpi"><div class="l">Cost the model counts</div><div class="v">${fP(MODEL.cost/(D.go*1e6),0)}</div><div class="d">of operating spending · ${fP(MODEL.cost/(D.allfunds*1e6),0)} of all funds</div></div>
+     <div class="kpi"><div class="l">Revenue the model counts</div><div class="v">${fP(MODEL.rev/(D.rev_go*1e6),0)}</div><div class="d">of operating revenue (net credit tuition)</div></div>
+     <div class="kpi"><div class="l">Operating grant in the model</div><div class="v">$0</div><div class="d">${f$(D.prov*1e6)} provincial revenue excluded</div></div>
+     <div class="kpi"><div class="l">Unreconciled included spend</div><div class="v">${f$(inc*1e6-MODEL.cost)}</div><div class="d">included functions not reaching programs (M7)</div></div>
+    </div>
+    <div class="grid g3" style="margin-top:14px">
+     <div><h3 style="color:var(--good)">Use it for</h3><ul class="tight"><li>Ranking and grouping programs within Dalhousie</li><li>Finding outliers and patterns in cost per credit hour</li><li>Asking why a program's cost structure differs from its peers</li><li>Testing the direction of change under scenarios</li></ul></div>
+     <div><h3 style="color:var(--crit)">Do not use it for</h3><ul class="tight"><li>Sizing the operating grant, or any share of it</li><li>Adding program margins and calling the total the institutional deficit</li><li>Comparing margins with another university without its Template 2.3 choices</li><li>Treating a negative margin as money a closure would save</li></ul></div>
+     <div><h3>How to cite it</h3><ul class="tight"><li>Call margin an <b>instructional contribution</b> before the operating grant and institutional costs</li><li>State the scope figures above alongside any total</li><li>Name the method caveats (M1–M8) that apply to the program</li></ul></div>
+    </div></section>
+
+   <section class="panel" data-s="csees"><header><div><h2>What the model sees, in dollars</h2><p class="q">Dalhousie's spending and revenue from the CAUBO FIUC return (${D.year}, $M), coloured by how program costing treats each piece. Markers show the program totals the model actually produced (2024-25).</p></div></header>
+    <div id="seesChart"></div>
+    <div class="legend"><span><i style="background:var(--hi)"></i>Included in program cost or revenue</span><span><i style="background:var(--m)"></i>Netted against tuition (unfunded share)</span><span><i style="background:var(--nc)"></i>Excluded</span><span><i style="background:var(--line);border:1px dashed var(--muted)"></i>Outside the operating fund</span></div></section>
+
+   <div class="grid g2" style="margin-top:0">
+    <section class="panel" data-s="cpeer"><header><div><h2>Dalhousie's cost structure is a U15 structure</h2><p class="q">Each dot is a Canadian university with operating spending over $30M (${FI.n} in ${D.year}). X: sponsored-research spending as a share of operating spending. Y: share of operating spending in the functions program costing includes.</p></div></header><div id="peerScatter"></div>
+     <div class="legend"><span><i style="background:var(--accent)"></i>Dalhousie</span><span><i style="background:var(--c-rat)"></i>Other Nova Scotia</span><span><i style="background:var(--hi)"></i>U15</span><span><i style="background:var(--nc)"></i>Other Canadian</span></div></section>
+    <section class="panel" data-s="cprox"><header><div><h2>The same method, applied to each university's FIUC</h2><p class="q">A like-for-like proxy: credit tuition ÷ spending in the included functions. It shows how program costing would read at each NS university before any allocation choices.</p></div></header><div id="proxyBars"></div></section>
+    <section class="panel" data-s="cfunc"><header><div><h2>Where the excluded spending sits</h2><p class="q">Share of operating spending by FIUC function: Dalhousie against the Nova Scotia and U15 medians.</p></div></header><div id="funcDots"></div>
+     <div class="legend"><span><i style="background:var(--accent)"></i>Dalhousie</span><span><i style="background:var(--c-rat)"></i>NS median</span><span><i style="background:var(--hi)"></i>U15 median</span></div></section>
+    <section class="panel" data-s="ctrend"><header><div><h2>Not a one-year effect</h2><p class="q">Proxy tuition coverage (credit tuition ÷ included-function spending), ${FI.ts.Dalhousie.years[0]} to ${FI.dal.year}. Dal has risen toward the NS median but has been below it in every year.</p></div></header><div id="trendLines"></div>
+     <div class="legend"><span><i style="background:var(--accent)"></i>Dalhousie</span><span><i style="background:var(--c-rat)"></i>NS median</span><span><i style="background:var(--hi)"></i>U15 median</span></div></section>
+   </div>
+
+   <section class="panel" data-s="cskew"><header><div><h2>Method caveats: where the method can skew Dalhousie's results</h2><p class="q">Each caveat names the mechanism, the evidence, and where it shows up. Codes appear as chips on the Programs tab and in the chart story tooltips, so a skew can be attributed wherever it surfaces. Counts reflect the current filter.</p></div></header>
+    <div class="skews">${SKEW.map(s=>{ const hit=s.pred?VIS.filter(s.pred):null; const [dl,dc]=DIR[s.dir]; return `<article class="skew" id="skew-${s.id}">
+      <div class="skew-h"><span class="chip m">${s.id}</span><h3>${s.t}</h3><span class="dir" style="color:${dc};border-color:${dc}">${dl}</span></div>
+      <p>${s.mech}</p><p class="ev"><span>Evidence</span>${s.ev()}</p><p class="ev"><span>Where it shows up</span>${s.where}</p>
+      ${hit?`<p class="hit">${hit.length} programs in view · ${fN(sum(hit,r=>r.e24))} students · ${f$(sum(hit,r=>r.mar))} combined contribution <button type="button" class="linkbtn" data-mfilter="${s.id}">List programs →</button></p>`:'<p class="hit">Portfolio-wide effect: applies to every figure.</p>'}
+     </article>`; }).join('')}</div></section>
+
+   <section class="panel" data-s="ctable"><header><div><h2>Inclusion reference</h2><p class="q">How each part of Dalhousie's finances is treated, with the guide reference and what it means when reading the results.</p></div></header>
+    <div class="tblwrap" style="max-height:none"><table class="wrap"><thead><tr><th>Item (FIUC)</th><th class="n">Dal ${D.year}</th><th>Treatment</th><th>Guide</th><th>Reading the results</th></tr></thead><tbody>
+    ${[
+     ['Instruction & non-sponsored research',D.instr,'in','Step 3–4','Teaching salaries are direct cost; research and service salary stays in department overhead (M1).'],
+     ['Library',D.library,'in','Step 4g','Spread across all sections.'],
+     ['Administration & academic support',D.admin,'in','Step 4g, p. 39','Included by default; president, finance and HR may be unbundled out (Template 2.2A).'],
+     ['Scholarships, bursaries & prizes',D.schol,'net','Step 6c','Unfunded share is subtracted from tuition, not counted as cost (M3).'],
+     ['Physical plant',D.plant,'out','Step 4g','Space-intensive programs look cheaper (M6).'],
+     ['Computing & communications',D.computing,'out','Step 4g, p. 40','Academic IT may be moved into academic support.'],
+     ['Student services (excl. awards)',D.studserv_ex,'out','Step 4g, p. 40','Career and accessibility services may be included.'],
+     ['External relations',D.extrel,'out','Step 4g','Fundraising and communications.'],
+     ['Non-credit instruction',D.noncredit,'out','Step 4g','Its revenue is also excluded.'],
+     ['Sponsored research fund',D.sr,'fund','Step 4f','Outside the operating fund entirely.'],
+     ['Ancillary, capital, special purpose',D.anc+D.cap+D.spt,'fund','Step 4f','Outside the operating fund entirely.'],
+     ['Credit course tuition',D.tuit,'in','Step 6','Net of unfunded awards; assigned to the student\'s primary program.'],
+     ['Provincial operating grant',D.prov,'out','Step 6d','Explicitly excluded (M4). Targeted program grants are included.'],
+     ['Sales of services',D.sales,'out','Step 6','Clinic and service revenue never reaches the program (M5).'],
+     ['Endowment & investment income',D.endow,'out','Step 6','Excluded (M4).'],
+     ['Non-credit tuition',D.nct,'out','Step 6','Excluded with its cost.']
+    ].map(([a,b,t,g,c])=>`<tr><td>${a}</td><td class="n">${f$(b*1e6)}</td><td><span class="treat ${t}">${{in:'Included',net:'Netted from revenue',out:'Excluded',fund:'Outside operating fund'}[t]}</span></td><td class="mono">${g}</td><td style="white-space:normal;min-width:240px">${c}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="note">Source: CAUBO Financial Information of Universities and Colleges (FIUC), ${D.year}, Dalhousie University; General Operating fund (Table 4), all-funds expenditure (Table 2) and revenue (Table 1). Program totals: Workstream D workbook, 2024-25. FIUC and costing years differ by one year.</p></section>
+  </div>`;
+  v.querySelectorAll('[data-mfilter]').forEach(b=>b.onclick=()=>{ mFilter=b.dataset.mfilter; tab='programs'; store.set('tab',tab); document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===tab)); render(); window.scrollTo({top:0}); });
+  drawSees($('seesChart')); drawPeer($('peerScatter')); drawProxy($('proxyBars')); drawFunc($('funcDots')); drawTrend($('trendLines'));
+}
+function drawSees(el){
+  const D=FI.dal, W_=1000, m={l:150,r:20,t:26}, rh=40, gap=40; const max=D.allfunds; const x=lin(0,max,m.l,W_-m.r);
+  const rows=[
+   ['All-funds spending',[['Operating fund',D.go,'go'],['Sponsored research',D.sr,'fund'],['Ancillary',D.anc,'fund'],['Capital',D.cap,'fund'],['Special purpose & trust',D.spt,'fund']],null],
+   ['Operating spending',[['Instruction & non-sponsored research',D.instr,'in'],['Library',D.library,'in'],['Admin & academic support',D.admin,'in'],['Scholarships & bursaries',D.schol,'net'],['Physical plant',D.plant,'out'],['Computing',D.computing,'out'],['Student services',D.studserv_ex,'out'],['External relations',D.extrel,'out'],['Non-credit instruction',D.noncredit,'out']],[MODEL.cost/1e6,'Program cost in model']],
+   ['Operating revenue',[['Credit tuition',D.tuit,'in'],['Provincial operating grant',D.prov,'out'],['Sales of services',D.sales,'out'],['Endowment & investment',D.endow,'out'],['Non-credit tuition',D.nct,'out'],['Other',D.rev_other,'out']],[MODEL.rev/1e6,'Program revenue in model']]
+  ];
+  const H=m.t+rows.length*(rh+gap)+10; const fill={in:'var(--hi)',net:'var(--m)',out:'var(--nc)',fund:'var(--line)',go:'var(--accent-wash)'};
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="What the costing model includes">`;
+  const xt=[0,200,400,600,800]; s+=`<g class="grid">${xt.map(t=>`<line x1="${x(t)}" x2="${x(t)}" y1="${m.t-6}" y2="${H-10}"/>`).join('')}</g>`+xt.map(t=>`<text x="${x(t)}" y="${m.t-10}" text-anchor="middle">$${t}M</text>`).join('');
+  rows.forEach(([lab,segs,mk],i)=>{ const y0=m.t+i*(rh+gap); let x0=0; const tot=sum(segs,q=>q[1]);
+    s+=`<text x="${m.l-10}" y="${y0+rh/2+4}" text-anchor="end" class="ink" style="font-weight:600">${lab}</text><text x="${m.l-10}" y="${y0+rh/2+18}" text-anchor="end" style="font-size:10px">${f$(tot*1e6)}</text>`;
+    segs.forEach(([n,val,t])=>{ const w=x(x0+val)-x(x0); const tt=`<b>${n}</b><div class="kv"><span>Amount</span><span>${f$(val*1e6)}</span><span>Share of row</span><span>${fP(val/tot,1)}</span><span>Treatment</span><span>${{in:'Included',net:'Netted against tuition',out:'Excluded',fund:'Outside operating fund',go:'Operating fund (broken down below)'}[t]}</span></div>`;
+      s+=`<rect ${tipAttr(tt)} x="${x(x0)+1}" y="${y0}" width="${Math.max(0,w-2)}" height="${rh}" rx="3" style="fill:${fill[t]};${t==='fund'?'stroke:var(--muted);stroke-dasharray:3 3;':''}${t==='go'?'stroke:var(--accent);':''}"/>`;
+      if(w>70) s+=`<text x="${x(x0)+6}" y="${y0+rh/2-2}" style="fill:${t==='in'||t==='net'?'#fff':'var(--ink)'};font-size:10.5px;font-weight:600;pointer-events:none">${esc(n.length*5.6>w-10?n.split(' ')[0]:n)}</text><text x="${x(x0)+6}" y="${y0+rh/2+11}" style="fill:${t==='in'||t==='net'?'#fff':'var(--ink-2)'};font-size:10px;pointer-events:none">${f$(val*1e6)}</text>`;
+      x0+=val; });
+    if(mk){ const mx=x(mk[0]); s+=`<line x1="${mx}" x2="${mx}" y1="${y0-6}" y2="${y0+rh+6}" style="stroke:var(--ink)" stroke-width="2.5"/><text x="${mx+6}" y="${y0+rh+18}" class="ink" style="font-weight:700;font-size:11px">▲ ${mk[1]}: ${f$(mk[0]*1e6)} (${fP(mk[0]/tot,0)})</text>`; }
+  });
+  el.innerHTML=s+'</svg>';
+}
+function drawPeer(el){
+  const P_=FI.peers, W_=560,H=400,m={l:52,r:14,t:14,b:42}; const x=lin(0,0.8,m.l,W_-m.r), y=lin(0.55,0.85,H-m.b,m.t);
+  const col=g=>g==='Dalhousie'?'var(--accent)':g==='Nova Scotia'?'var(--c-rat)':g==='U15'?'var(--hi)':'var(--nc)';
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Research intensity vs included share">`;
+  const xt=[0,.2,.4,.6,.8], yt=[.55,.6,.65,.7,.75,.8,.85];
+  s+=`<g class="grid">${xt.map(t=>`<line x1="${x(t)}" x2="${x(t)}" y1="${m.t}" y2="${H-m.b}"/>`).join('')}${yt.map(t=>`<line x1="${m.l}" x2="${W_-m.r}" y1="${y(t)}" y2="${y(t)}"/>`).join('')}</g>`;
+  s+=xt.map(t=>`<text x="${x(t)}" y="${H-m.b+16}" text-anchor="middle">${Math.round(t*100)}%</text>`).join('')+yt.map(t=>`<text x="${m.l-6}" y="${y(t)+4}" text-anchor="end">${Math.round(t*100)}%</text>`).join('');
+  s+=`<text x="${(m.l+W_)/2}" y="${H-6}" text-anchor="middle" class="mut">Sponsored research ÷ operating spending</text><text transform="translate(12,${(m.t+H-m.b)/2}) rotate(-90)" text-anchor="middle" class="mut">Included-function share</text>`;
+  const order=['Other Canada','Atlantic','U15','Nova Scotia','Dalhousie']; const placed=[];
+  P_.slice().sort((a,b)=>order.indexOf(a.g)-order.indexOf(b.g)).forEach(p=>{ if(p.ri==null||p.incl==null) return; const cx=x(Math.min(.8,p.ri)), cy=y(Math.max(.55,Math.min(.85,p.incl))); const big=p.g==='Dalhousie';
+    s+=`<circle ${tipAttr(`<b>${esc(p.n)}</b><div class="kv"><span>Operating spending</span><span>${f$(p.go*1e6)}</span><span>Research intensity</span><span>${fP(p.ri,0)}</span><span>Included share</span><span>${fP(p.incl,1)}</span><span>Proxy tuition coverage</span><span>${fP(p.prox,0)}</span></div>`)} cx="${cx}" cy="${cy}" r="${big?8:5}" style="fill:${p.g==='Atlantic'?'var(--nc)':col(p.g)};fill-opacity:${p.g==='Other Canada'||p.g==='Atlantic'?.6:.9};stroke:var(--panel)" stroke-width="1.5"/>`;
+    let ly=cy+4; if(p.g==='Dalhousie'||p.g==='Nova Scotia'){ while(placed.some(([px,py])=>Math.abs(px-cx)<90&&Math.abs(py-ly)<12)) ly+=12; placed.push([cx,ly]); }
+    if(p.g==='Dalhousie'||p.g==='Nova Scotia') s+=`<text x="${cx+(big?11:7)}" y="${ly}" class="ink" style="font-size:${big?12:10}px;font-weight:${big?700:400};pointer-events:none">${esc(p.n.replace(' University','').replace('University of ',''))}</text>`; });
+  el.innerHTML=s+'</svg>'+`<p class="note">Dal: ${fP(FI.med.Dalhousie.incl_sh,1)} included vs NS median ${fP(FI.med['Nova Scotia'].incl_sh,1)} and U15 median ${fP(FI.med.U15.incl_sh,1)}. A higher included share means more of the operating budget is loaded onto programs. Points beyond 80% research intensity are pinned to the edge.</p>`;
+}
+function drawProxy(el){
+  const rows=FI.peers.filter(p=>p.g==='Dalhousie'||p.g==='Nova Scotia').map(p=>({n:p.n.replace(' University','').replace('University ',''),v:p.prox,g:p.g}));
+  rows.push({n:'NS median',v:FI.med['Nova Scotia'].proxy_rec,g:'med'},{n:'U15 median',v:FI.med.U15.proxy_rec,g:'u15'});
+  rows.sort((a,b)=>b.v-a.v);
+  const W_=560,rh=28,m={l:150,r:56,t:6,b:24},H=m.t+rows.length*rh+m.b; const xmax=Math.max(1,Math.ceil(Math.max(...rows.map(r=>r.v))*4)/4); const x=lin(0,xmax,m.l,W_-m.r); const ticks=[];for(let t=0;t<=xmax+1e-9;t+=.25)ticks.push(+t.toFixed(2));
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Proxy tuition coverage">`;
+  s+=`<g class="grid">${ticks.map(t=>`<line x1="${x(t)}" x2="${x(t)}" y1="${m.t}" y2="${H-m.b}"/>`).join('')}</g><line x1="${x(1)}" x2="${x(1)}" y1="${m.t}" y2="${H-m.b}" class="ref"/>`+ticks.map(t=>`<text x="${x(t)}" y="${H-6}" text-anchor="middle">${Math.round(t*100)}%</text>`).join('');
+  rows.forEach((r,i)=>{ const y0=m.t+i*rh+5; const c=r.g==='Dalhousie'?'var(--accent)':r.g==='Nova Scotia'?'var(--c-rat)':r.g==='u15'?'var(--hi)':'var(--ink-2)';
+    s+=`<text x="${m.l-8}" y="${y0+13}" text-anchor="end" class="ink" style="${r.g==='Dalhousie'||r.g==='med'||r.g==='u15'?'font-weight:700':''}">${esc(r.n)}</text>`;
+    s+=`<rect ${tipAttr(`<b>${esc(r.n)}</b><br>Credit tuition ÷ included-function spending: ${fP(r.v,1)}`)} x="${x(0)}" y="${y0}" width="${x(r.v)-x(0)}" height="${rh-10}" rx="3" style="fill:${c};${r.g==='med'||r.g==='u15'?'fill-opacity:.55':''}"/>`;
+    s+=`<text x="${x(r.v)+5}" y="${y0+13}" class="ink" style="font-size:10.5px">${fP(r.v,0)}</text>`; });
+  el.innerHTML=s+'</svg>'+`<p class="note">On this proxy Dal reads <b>${Math.round((FI.med['Nova Scotia'].proxy_rec-FI.med.Dalhousie.proxy_rec)*100)} points</b> below the NS median and ${Math.round((FI.med.Dalhousie.proxy_rec-FI.med.U15.proxy_rec)*100)} above the U15 median. Dal's actual model output (84%) is higher than its proxy because only ${f$(MODEL.cost)} of the ${f$((FI.dal.instr+FI.dal.library+FI.dal.admin)*1e6)} included spending reached programs (M7).</p>`;
+}
+function drawFunc(el){
+  const R=[['Instruction & NSR','instr_sh','in'],['Library','library_sh','in'],['Admin & acad. support','admin_sh','in'],['Scholarships','schol_sh','net'],['Physical plant','plant_sh','out'],['Student services','studserv_ex_sh','out'],['Computing','computing_sh','out'],['External relations','extrel_sh','out'],['Non-credit instruction','noncredit_sh','out']];
+  const W_=560,rh=30,m={l:170,r:20,t:8,b:26},H=m.t+R.length*rh+m.b; const x=lin(0,.16,m.l,W_-m.r);
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Function shares">`;
+  const xt=[0,.04,.08,.12,.16]; s+=`<g class="grid">${xt.map(t=>`<line x1="${x(t)}" x2="${x(t)}" y1="${m.t}" y2="${H-m.b}"/>`).join('')}</g>`+xt.map(t=>`<text x="${x(t)}" y="${H-8}" text-anchor="middle">${t*100}%</text>`).join('');
+  R.forEach(([n,k,t],i)=>{ const cy=m.t+i*rh+rh/2; const d=FI.med.Dalhousie[k], ns=FI.med['Nova Scotia'][k], u=FI.med.U15[k];
+    s+=`<text x="${m.l-10}" y="${cy+4}" text-anchor="end" class="ink">${n}</text><text x="${8}" y="${cy+4}" style="font-size:9.5px;fill:${t==='in'?'var(--hi)':t==='net'?'var(--m)':'var(--muted)'};font-weight:700">${t==='in'?'IN':t==='net'?'NET':'OUT'}</text>`;
+    const vals=[d,ns,u]; const big=Math.max(...vals)>.16;
+    const X=v=>x(Math.min(.16,v)); s+=`<line x1="${X(Math.min(...vals))}" x2="${X(Math.max(...vals))}" y1="${cy}" y2="${cy}" style="stroke:var(--axis)" stroke-width="2"/>`;
+    [[u,'var(--hi)','U15 median'],[ns,'var(--c-rat)','NS median'],[d,'var(--accent)','Dalhousie']].forEach(([vv,c,l])=>s+=`<circle ${tipAttr(`<b>${n}</b><br>${l}: ${fP(vv,1)} of operating spending`)} cx="${X(vv)}" cy="${cy}" r="${l==='Dalhousie'?7:5.5}" style="fill:${c};stroke:var(--panel)" stroke-width="1.5"/>`);
+    if(big) s+=`<text x="${W_-m.r}" y="${cy-8}" text-anchor="end" style="font-size:10px">→ ${fP(d,0)} / ${fP(ns,0)} / ${fP(u,0)}</text>`; });
+  el.innerHTML=s+'</svg>'+`<p class="note">Instruction & NSR is off the scale (Dal ${fP(FI.med.Dalhousie.instr_sh,0)}, NS ${fP(FI.med['Nova Scotia'].instr_sh,0)}, U15 ${fP(FI.med.U15.instr_sh,0)}). Dal spends less of its budget on administration and student services, both excluded or partly excluded, and more on instruction & research, which is included.</p>`;
+}
+function drawTrend(el){
+  const T=FI.ts, yrs=T.Dalhousie.years; const W_=560,H=260,m={l:44,r:70,t:14,b:30}; const x=lin(0,yrs.length-1,m.l,W_-m.r), y=lin(.3,.9,H-m.b,m.t);
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="Proxy coverage trend">`; const yt=[.3,.45,.6,.75,.9];
+  s+=`<g class="grid">${yt.map(t=>`<line x1="${m.l}" x2="${W_-m.r}" y1="${y(t)}" y2="${y(t)}"/>`).join('')}</g>`+yt.map(t=>`<text x="${m.l-6}" y="${y(t)+4}" text-anchor="end">${Math.round(t*100)}%</text>`).join('');
+  yrs.forEach((yy,i)=>{ if(i%4===0||i===yrs.length-1) s+=`<text x="${x(i)}" y="${H-10}" text-anchor="middle">${yy.slice(2,4)}-${yy.slice(-2)}</text>`; });
+  [['U15','var(--hi)'],['Nova Scotia','var(--c-rat)'],['Dalhousie','var(--accent)']].forEach(([k,c])=>{ const ser=T[k]; const pts=yrs.map((yy,i)=>{const j=ser.years.indexOf(yy); return j<0||ser.prox[j]==null?null:[x(i),y(ser.prox[j]),ser.prox[j],yy]}).filter(Boolean);
+    s+=`<path d="${pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join('')}" fill="none" style="stroke:${c}" stroke-width="${k==='Dalhousie'?2.5:2}"/>`;
+    pts.forEach(p=>s+=`<circle ${tipAttr(`<b>${k==='Nova Scotia'?'NS median':k==='U15'?'U15 median':'Dalhousie'}, ${p[3]}</b><br>Proxy tuition coverage ${fP(p[2],1)}`)} cx="${p[0]}" cy="${p[1]}" r="6" fill="transparent"/>`);
+    const last=pts[pts.length-1]; s+=`<circle cx="${last[0]}" cy="${last[1]}" r="3.5" style="fill:${c}"/><text x="${last[0]+7}" y="${last[1]+4}" class="ink" style="font-size:10.5px">${k==='Nova Scotia'?'NS':k==='U15'?'U15':'Dal'} ${fP(last[2],0)}</text>`; });
+  el.innerHTML=s+'</svg>';
+}
+
+
+/* story additions for the costing model and method caveats */
+Object.assign(STORY,{
+ cscope:{h:'State the limits before the numbers',tell:'Program costing captures the instructional slice of the university and only tuition revenue. These four figures set the frame every other number in this tool must be read in, and they are the answer to anyone who treats the program "deficit" as the size of the grant need.',look:['The share of operating spending the model counts.','That the operating grant contributes $0 to any program.','The unreconciled gap (M7): included spending that never reached a program.'],links:['R1'],m:['M4','M7'],read:'Shares use FIUC 2023-24 for Dalhousie and the 2024-25 program costing totals.',live:()=>''},
+ csees:{h:'What is inside and outside the model',tell:'Three bars on one dollar scale. The top bar is all of Dalhousie\'s spending; research, ancillary and capital funds never enter program costing. The middle bar breaks the operating fund into functions; only the blue ones feed program cost, and even they do not fully arrive (the marker). The bottom bar shows that only credit tuition counts as program revenue; the operating grant is about as large and is excluded.',look:['The distance between the end of the blue segments and the program-cost marker (M7).','The size of the grey provincial grant segment next to blue tuition.','The violet scholarships segment: counted against revenue, not cost (M3).'],links:['R1'],m:['M3','M4','M6','M7'],read:'Blue: included. Violet: netted against tuition. Grey: excluded. Dashed: outside the operating fund. Black markers: program totals the model produced.',live:()=>''},
+ cpeer:{h:'Is Dal\'s cost base comparable to its NS peers?',tell:'Program costing loads the included functions onto programs. If a university puts more of its budget into those functions, its programs carry more cost under the same method. Dal\'s profile matches the U15, not the rest of Nova Scotia: research-intensive, with more of its operating budget in instruction and research and less in administration and student services.',look:['Dal\'s position against the orange NS dots: further right (research) and higher (more included).','That U15 universities cluster around the same included share as Dal.'],links:[],m:['M1','M2'],read:'Each dot is a university. Orange: other NS universities. Blue: U15. Grey: other Canadian.',live:()=>`Dal: ${fP(FI.med.Dalhousie.ri,0)} research intensity, ${fP(FI.med.Dalhousie.incl_sh,1)} included. NS median: ${fP(FI.med['Nova Scotia'].ri,0)}, ${fP(FI.med['Nova Scotia'].incl_sh,1)}.`},
+ cprox:{h:'How would every NS university look under this method?',tell:'A proxy that applies the model\'s scope rules to each university\'s FIUC return: credit tuition divided by spending in the included functions. It strips out institution-specific allocation choices, so it is the fairest available like-for-like comparison. It shows Dal starting well behind its NS peers before a single program is costed.',look:['The gap between Dal and the NS median.','That Dal sits close to the U15 median: the method treats research universities alike.'],links:['R1'],m:['M1','M4'],read:'Bars: credit tuition ÷ (instruction & non-sponsored research + library + administration & academic support).',live:()=>`Dal ${fP(FI.med.Dalhousie.proxy_rec,0)} vs NS median ${fP(FI.med['Nova Scotia'].proxy_rec,0)} and U15 median ${fP(FI.med.U15.proxy_rec,0)}.`},
+ cfunc:{h:'Which exclusions matter for Dal?',tell:'Shows where Dal\'s spending differs from peers in functions the model treats differently. Dal spends relatively more on included instruction and research and relatively less on excluded or partly excluded administration and student services. Under program costing that difference turns into higher program cost for Dal, with no change in actual efficiency.',look:['Rows marked IN where Dal is right of the NS median: more cost loaded onto programs.','Rows marked OUT where Dal is left of the NS median: less cost removed.','Scholarships (NET): Dal\'s higher share lowers program revenue (M3).'],links:[],m:['M1','M3','M6'],read:'Dots show each function\'s share of operating spending. IN = included, NET = netted from tuition, OUT = excluded.',live:()=>''},
+ ctrend:{h:'Is the gap structural?',tell:'If Dal\'s lower coverage were a one-year anomaly it could be dismissed. Over 24 years of FIUC data it is persistent, so it reflects Dal\'s structure (research, graduate and professional education), not a recent cost problem.',look:['Dal below the NS median in every year.','Dal tracking the U15 median.'],links:['R1'],m:['M1','M4'],read:'Lines: proxy tuition coverage by year. NS and U15 lines are medians.',live:()=>''},
+ cskew:{h:'Attribute skews where they show up',tell:'Each caveat ties a feature of the method to the programs and charts it affects, with a direction. Use the codes when presenting a result: "Dentistry\'s contribution is affected by M5 and M6" tells the reader which way the number is biased and why.',look:['Caveats marked "Disadvantages Dal vs NS peers": cite these whenever Dal is compared with other universities.','Caveats that shift cost between Dal programs: cite these in faculty and program comparisons.','"List programs" opens the Programs tab filtered to that caveat.'],links:[],m:[],read:'Coloured pills give the direction of each skew.',live:()=>''},
+ ctable:{h:'Line-by-line treatment',tell:'A reference for anyone checking a figure: every major FIUC line, how program costing treats it, and where the guide says so.',look:['Large excluded lines that relate directly to teaching (plant, academic IT).'],links:[],m:[],read:'Amounts are Dalhousie FIUC 2023-24.',live:()=>''}
+});
+Object.assign(CHART,{cscope:'Costing model scope',csees:'What the model sees',cpeer:'Peer cost structure',cprox:'Proxy tuition coverage',cfunc:'Function shares',ctrend:'Coverage trend',cskew:'Method caveats',ctable:'Inclusion reference'});
+const SM={kpi:['M4','M7'],whale:['M4','M5','M7'],mix:['M1','M2'],hist:['M1','M2','M3'],bands:['M2'],bub1:['M1','M2','M3'],lma:['M1','M4'],facT:['M4','M5','M6','M8'],strip:['M1','M8'],grow:['M4'],ro:['M1','M3'],progT:['M1','M2','M3','M5','M6','M8'],bridge:['M6','M7'],levers:['M6','M7'],facimp:['M6','M8']};
+Object.entries(SM).forEach(([k,v])=>{ if(STORY[k]) STORY[k].m=v; });
+STORY.kpi.h='Instructional economics at a glance';
+STORY.kpi.tell='Sets the frame for every other view: how much of the cost the model counts is covered by net credit tuition, and how large the contribution shortfall is before the operating grant. It is not the university\'s financial position: the model counts roughly half of operating spending and none of the grant.';
+STORY.kpi.look=['Tuition coverage below 100% is expected: the operating grant is not allocated to programs.','Never read the contribution figure as the grant requirement or the institutional deficit.','Compare enrolment change with contribution: growth that leaves coverage flat or falling is growth in low-contribution programs.'];
+STORY.detail.m=[];
 
 initControls(); render();

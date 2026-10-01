@@ -162,5 +162,8 @@ table.wrap td{vertical-align:top}
 .caveats{border-top:1px solid var(--line);padding-top:8px;font-size:.82rem}
 .caveats .cv{display:grid;grid-template-columns:34px 1fr;gap:8px;margin-top:6px}
 .tip .dir{font-size:.6rem}
+.lens-bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:16px;font-size:.8rem}
+.lens-bar>span:first-child{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.lens-bar .scope{flex:1 1 300px}
 .caveats .cv .chip{align-self:start;justify-self:start;margin-top:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}

@@ -1,0 +1,7 @@
+# Source workbooks stay out of the repo
+*.xlsx
+*.xls
+*.csv
+~$*
+.DS_Store
+__pycache__/

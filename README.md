@@ -11,7 +11,9 @@ index.html              Page shell
 assets/styles.css       Styles (light and dark themes follow the viewer's OS setting)
 assets/app.js           All charts and logic (plain JavaScript, no libraries)
 data/programs.js        Program data, generated from the workbook
+data/fiuc.js            CAUBO FIUC peer comparison for the Costing model tab
 scripts/build_data.py   Regenerates data/programs.js from the Excel workbook
+scripts/build_fiuc.py   Regenerates data/fiuc.js from the CAUBO FIUC master dataset
 .github/workflows/      Optional GitHub Pages deployment
 .nojekyll               Tells GitHub Pages to serve files as-is
 ```
@@ -59,6 +61,32 @@ The script uses the first sheet and checks that every expected column header is 
 
 Note: the **Briefing** tab's findings are written text with figures from the October 2026 file (whole portfolio, default settings). All other tabs recalculate from the data. After a data refresh, update the findings text in `assets/app.js` (the `FINDINGS` list). The "In the current view" lines in the story tooltips recalculate automatically.
 
+## Costing model tab and method caveats
+
+The **Costing model** tab states the scope and limits of the Workstream B program costing before any results are read:
+
+- what share of Dalhousie's operating and all-funds spending and revenue the model counts
+- a dollar view of what is included, netted or excluded, line by line with guide references
+- a comparison with every Canadian university's FIUC return (research intensity, included-function share, a like-for-like "proxy tuition coverage", function shares, and a 24-year trend)
+- eight **method caveats (M1–M8)**: features of the method that skew Dalhousie's results, with the mechanism, evidence and direction of each
+
+Caveat codes appear as violet chips on the Programs tab (with a filter), on the Faculties scorecard, in each program's peer-comparison panel, and in the chart story tooltips, so a skew is attributed wherever it shows up. Their definitions, including which programs each one flags, are in the `SKEW` list in `assets/app.js`.
+
+Program-level caveat flags (for example "space-intensive faculties" for M6) are reasoned assumptions, not measured. Review them with the costing team before relying on them.
+
+### Update the FIUC comparison
+
+When CAUBO releases a new FIUC master dataset:
+
+```bash
+pip install pandas
+python scripts/build_fiuc.py "path/to/CAUBO_FIUC-Master_Dataset.xlsb"
+git add data/fiuc.js
+git commit -m "Refresh FIUC comparison"
+```
+
+The script reads `.xlsb` directly with a built-in parser, so no extra package is needed. It uses the latest year in the file. Peer groups (Nova Scotia, Atlantic, U15) are listed near the top of the script. The program-cost and program-revenue totals the tab compares against are set in `MODEL` in `assets/app.js`; update them if the costing workbook changes.
+
 ## Story tooltips
 
 Every chart title (marked **story**), subtitle and legend has a tooltip explaining what that distribution tells you, what to look for, a live reading for the current filters, and which Briefing findings (R1–R7, O1–O3) it supports. Legends explain how to read the encoding. Keyboard users can tab to a chart title to open its story; Esc closes it. The Briefing tab lists, under each finding, the charts that show it and a link to open that tab.
@@ -72,6 +100,7 @@ The story text lives in `assets/app.js` in the `STORY` object (one entry per cha
 
 ## Method notes
 
+- Margins are labelled **instructional contribution**: they are before the operating grant and the costs program costing excludes. See the Costing model tab.
 - Quadrants follow the APR Guide (pp. 116–120). "Above line" means margin per credit hour is at or above the costing-table threshold (−$100 for Table 2, −$1,000 for Table 1 thesis-based graduate programs), or at or above $0 if you switch the margin line.
 - With default settings, quadrant assignments reproduce the workbook's "Quadrant · margin × enrolment" column exactly.
 - The signal-implied category is a mechanical reading of the guide's quadrant logic, meant to prompt review. It is not a recommendation.

@@ -61,6 +61,14 @@ The script uses the first sheet and checks that every expected column header is 
 
 Note: the **Briefing** tab's findings are written text with figures from the October 2026 file (whole portfolio, default settings). All other tabs recalculate from the data. After a data refresh, update the findings text in `assets/app.js` (the `FINDINGS` list). The "In the current view" lines in the story tooltips recalculate automatically.
 
+## Labour market tab
+
+Uses the labour-market columns in the workbook: LMA signal (AD), NS employment outlook (AE) and COPS shortage/surplus (AF). Column AG (Employment prospects) is empty, and AH (margin × LMA quadrant) is recalculated live.
+
+- **Labour-market lens** (Analysis parameters, or the switch at the top of the tab) chooses which source defines the groups. It also sets what "stronger labour market" means in the risk and opportunity scores, the signal-implied category, and the **Labour market** filter in the filter bar.
+- The tab shows enrolment shift by group, contribution by group, a supply-response map (enrolment trend against signal, with vulnerability and watch zones), the shortage pipeline with flags, faculty profiles, a signal-consistency matrix and the limits of the evidence (L1–L6).
+- The Portfolio tab adds a quadrant mix by labour-market group, and the Quadrants bubble chart can be coloured by labour-market group.
+
 ## Costing model tab and method caveats
 
 The **Costing model** tab states the scope and limits of the Workstream B program costing before any results are read:

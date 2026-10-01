@@ -1,6 +1,7 @@
 # Source workbooks stay out of the repo
 *.xlsx
 *.xls
+*.xlsb
 *.csv
 ~$*
 .DS_Store

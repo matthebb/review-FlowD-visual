@@ -6,7 +6,7 @@ const QUADS = ['High / growing','High / declining','Low / growing','Low / declin
 const QC = {'High / growing':'var(--hi)','High / declining':'var(--hi-lt)','Low / growing':'var(--lo)','Low / declining':'var(--lo-lt)','Not charted':'var(--nc)'};
 const LEVELS = ['UG','Masters','Doctoral','Diploma/Tech','Post-bacc'];
 const FACS = [...new Set(RAW.map(r=>r.fac))].sort();
-const TABS = [['brief','Briefing'],['costing','Costing model'],['portfolio','Portfolio'],['quadrants','Quadrants'],['labour','Labour market'],['faculties','Faculties'],['programs','Programs'],['categories','Categories'],['scenarios','Scenarios']];
+const TABS = [['brief','Briefing'],['costing','Costing model'],['portfolio','Portfolio'],['quadrants','Quadrants'],['labour','Labour market'],['faculties','Faculties'],['programs','Programs'],['categories','Categories'],['scenarios','Scenarios'],['guide','Reading guide']];
 const DEF_P = {trend:'c3',grow:0,marg:'thr',smUG:25,smGR:8,minN:0,size:'e24',lm:'lma'};
 const DEF_W = {below:2,decl:1,sust:1,small:1,weak:1,share:1,grads:1,deficit:1, strong:2,short:1,grow:1,above:1,mkt:1,res:1};
 const DEF_S = {rev:8,mod:4,nc:0,rat:-100,vc:40,ratRec:60,eff:0,dropTeach:true};
@@ -108,6 +108,8 @@ function ensureControls(){
 }
 function initControls(){
   ensureControls();
+  if(!$('guideLink')){ const b=document.createElement('button'); b.type='button'; b.id='guideLink'; b.className='linkbtn guide-link'; $('scope').after(b); }
+  $('guideLink').onclick=()=>{ const from=tab; goTab('guide', GUIDE_SEC[from]); };
   opts($('fFac'),FACS,F.fac,'All faculties'); opts($('fLv'),LEVELS,F.lv,'All levels'); opts($('fCat'),CATS,F.cat,'All categories');
   $('fFac').onchange=e=>{F.fac=e.target.value;render()}; $('fLv').onchange=e=>{F.lv=e.target.value;render()}; $('fCat').onchange=e=>{F.cat=e.target.value;render()};
   $('fTeach').onchange=e=>{F.teach=e.target.checked;render()};
@@ -116,7 +118,13 @@ function initControls(){
   Object.entries(pmap).forEach(([id,k])=>{ const el=$(id); el.value=P[k]; el.onchange=()=>{ P[k]= el.type==='number'? (+el.value||0) : el.value; if(k==='lm') F.lmg='All'; store.set('P',P); render(); }; });
   $('pReset').onclick=()=>{ P={...DEF_P}; Object.entries(pmap).forEach(([id,k])=>$(id).value=P[k]); store.set('P',P); render(); };
   $('tabs').innerHTML = TABS.map(([k,l])=>`<button role="tab" type="button" data-tab="${k}" aria-selected="${k===tab}">${l}</button>`).join('');
-  $('tabs').onclick = e => { const b=e.target.closest('[data-tab]'); if(!b) return; tab=b.dataset.tab; store.set('tab',tab); document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===tab)); render(); window.scrollTo({top:0}); };
+  $('tabs').onclick = e => { const b=e.target.closest('[data-tab]'); if(!b) return; goTab(b.dataset.tab); };
+}
+function goTab(k, anchor){
+  tab=k; store.set('tab',tab);
+  document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===tab));
+  render();
+  if(anchor) guideScroll(anchor, false); else window.scrollTo({top:0});
 }
 function render(){
   recompute(); TIPS.clear(); tipN=0;
@@ -125,9 +133,11 @@ function render(){
   const t = totals(VIS);
   $('scope').textContent = `${VIS.length} of ${RAW.length} programs · ${fN(t.e24)} students · line: ${P.marg==='thr'?'table threshold':'$0'} · trend: ${P.trend==='c3'?'3-yr':'10-yr'}`;
   const v = $('view');
-  ({brief:vBrief,costing:vCosting,portfolio:vPortfolio,quadrants:vQuadrants,labour:vLabour,faculties:vFaculties,programs:vPrograms,categories:vCategories,scenarios:vScenarios})[tab](v);
+  document.body.classList.toggle('tab-guide', tab==='guide');
+  ({brief:vBrief,costing:vCosting,portfolio:vPortfolio,quadrants:vQuadrants,labour:vLabour,faculties:vFaculties,programs:vPrograms,categories:vCategories,scenarios:vScenarios,guide:vGuide})[tab](v);
+  const gl=$('guideLink'); if(gl){ gl.hidden = tab==='guide' || !GUIDE_SEC[tab]; gl.textContent='How to read this tab →'; }
   decorateStories(v);
-  v.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{ tab=b.dataset.goto; store.set('tab',tab); document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x.dataset.tab===tab)); render(); window.scrollTo({top:0}); });
+  v.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>goTab(b.dataset.goto));
 }
 
 /* ---------- tooltip ---------- */
@@ -678,6 +688,38 @@ function scen(r){
   else { r2=rev*g; c2=cost*(1-v)+cost*v*g; if(r.cat==='Revitalize' && r.above===false) c2*=1-S.eff/100; }
   return {e:(r.e24||0)*g, rev:r2, cost:c2, mar:r2-c2, chp:(r.chp||0)*g};
 }
+/* ---------- reading guide ---------- */
+const GUIDE = window.GUIDE || null;
+const GUIDE_SEC = {};
+if(GUIDE) GUIDE.toc.forEach(s=>{ if(s.tab) GUIDE_SEC[s.tab]=s.id; });
+function guideScroll(id, smooth){
+  const el=document.getElementById(id); if(!el) return;
+  const deck=document.querySelector('.deck'); const off=(deck?deck.offsetHeight:0)+12;
+  window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - off, behavior: smooth?'smooth':'auto'});
+}
+function vGuide(v){
+  if(!GUIDE){ v.innerHTML='<p class="empty">The reading guide is not loaded. Run scripts/build_guide.py to generate data/guide.js.</p>'; return; }
+  const toc = GUIDE.toc.map(s=>`<li><a href="#${s.id}" data-g="${s.id}">${esc(s.t)}</a>${s.sub.length?`<ul>${s.sub.map(x=>`<li><a href="#${x.id}" data-g="${x.id}">${esc(x.t)}</a></li>`).join('')}</ul>`:''}</li>`).join('');
+  v.innerHTML = `<div class="guide">
+   <nav class="g-toc" aria-label="Reading guide contents">
+    <details open id="gTocBox"><summary>Contents</summary><ol>${toc}</ol></details>
+   </nav>
+   <article class="g-body panel">
+    <header class="g-head"><h1>Reading guide</h1><p class="sub">How each tab and chart represents the data, what the calculations are, and what the patterns mean as APR signals.${GUIDE.updated?` Last updated ${esc(GUIDE.updated)}.`:''}</p></header>
+    ${GUIDE.html}
+   </article></div>`;
+  { const d=document.querySelector('.deck'); if(d) document.documentElement.style.setProperty('--deck-h',(d.offsetHeight+12)+'px'); }
+  const box=$('gTocBox'); if(box && matchMedia('(max-width: 900px)').matches) box.open=false;
+  v.querySelectorAll('[data-g]').forEach(a=>a.onclick=e=>{ e.preventDefault(); if(box && matchMedia('(max-width: 900px)').matches) box.open=false; guideScroll(a.dataset.g, true); });
+  // highlight the section being read
+  const links=[...v.querySelectorAll('.g-toc a')], heads=[...v.querySelectorAll('.g-body h2[id], .g-body h3[id]')];
+  const deck=document.querySelector('.deck');
+  const spy=()=>{ if(tab!=='guide') return; const lim=(deck?deck.offsetHeight:0)+24; let cur=heads[0]; for(const h of heads){ if(h.getBoundingClientRect().top<=lim) cur=h; else break; }
+    links.forEach(a=>a.classList.toggle('on', cur && a.dataset.g===cur.id));
+    const on=v.querySelector('.g-toc a.on'), tc=v.querySelector('.g-toc'); if(on&&tc&&tc.scrollHeight>tc.clientHeight){ const t=on.getBoundingClientRect().top-tc.getBoundingClientRect().top+tc.scrollTop; if(t<tc.scrollTop+20||t>tc.scrollTop+tc.clientHeight-40) tc.scrollTop=t-tc.clientHeight/3; } };
+  window.removeEventListener('scroll', window.__gSpy||(()=>{})); window.__gSpy=spy; window.addEventListener('scroll', spy, {passive:true}); spy();
+}
+
 function vScenarios(v){
   const a=VIS; const base=totals(a);
   const sc=a.map(r=>({r,s:scen(r)}));

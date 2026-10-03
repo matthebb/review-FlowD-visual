@@ -12,8 +12,11 @@ assets/styles.css       Styles (light and dark themes follow the viewer's OS set
 assets/app.js           All charts and logic (plain JavaScript, no libraries)
 data/programs.js        Program data, generated from the workbook
 data/fiuc.js            CAUBO FIUC peer comparison for the Costing model tab
+data/guide.js           Reading guide tab, generated from docs/reading-guide.md
+docs/reading-guide.md   Reading guide text (edit this, then rebuild)
 scripts/build_data.py   Regenerates data/programs.js from the Excel workbook
 scripts/build_fiuc.py   Regenerates data/fiuc.js from the CAUBO FIUC master dataset
+scripts/build_guide.py  Regenerates data/guide.js from docs/reading-guide.md
 .github/workflows/      Optional GitHub Pages deployment
 .nojekyll               Tells GitHub Pages to serve files as-is
 ```
@@ -94,6 +97,21 @@ git commit -m "Refresh FIUC comparison"
 ```
 
 The script reads `.xlsb` directly with a built-in parser, so no extra package is needed. It uses the latest year in the file. Peer groups (Nova Scotia, Atlantic, U15) are listed near the top of the script. The program-cost and program-revenue totals the tab compares against are set in `MODEL` in `assets/app.js`; update them if the costing workbook changes.
+
+## Reading guide tab
+
+The **Reading guide** tab explains every tab and chart: the APR Guide requirement it serves, what the fields measure, how values are calculated and drawn, and what the patterns mean as APR signals. It has a contents list that follows your place, an **Open …** button on each tab section, and every other tab has a **How to read this tab →** link (next to the program count) that jumps to its section.
+
+To change the text, edit `docs/reading-guide.md` (plain markdown), then rebuild:
+
+```bash
+pip install markdown
+python scripts/build_guide.py
+git add docs/reading-guide.md data/guide.js
+git commit -m "Update reading guide"
+```
+
+Keep the `## <Name> tab` headings as they are: the script uses them to add the **Open** buttons and the **How to read this tab** links. The line `<!-- diagram: data-flow -->` places the data-flow diagram, which is drawn in `scripts/build_guide.py`.
 
 ## Story tooltips
 
